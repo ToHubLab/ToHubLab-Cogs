@@ -1,0 +1,13 @@
+{
+    "author": ["ToHubLab"],
+    "name": "Sticky",
+    "short": "Keep a message at the bottom of a channel.",
+    "description": "Automatically reposts a sticky message at the bottom of a channel when new messages arrive.",
+    "end_user_data_statement": "This cog stores channel IDs and message content.",
+    "install_msg": "Thank you for installing Sticky! 🐙\n\nJoin our Discord for support & updates:\nhttps://discord.com/invite/TgYqGq9P3v",
+    "tags": ["utility", "sticky", "message"],
+    "min_bot_version": "3.5.0",
+    "hidden": false,
+    "disabled": false,
+    "type": "COG"
+}
