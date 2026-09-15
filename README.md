@@ -1,6 +1,6 @@
 # ToHubLab-Cogs
 
-A collection of custom cogs for [Red-DiscordBot](https://github.com/CogCreators/Red-DiscordBot) V3.5.0 or higher. Built and maintained by [ToHubLab](https://github.com/ToHubLab).
+A collection of custom cogs for [Red-DiscordBot](https://github.com/Cog-Creators/Red-DiscordBot) V3.5.0 or higher. Built and maintained by [ToHubLab](https://github.com/ToHubLab).
 
 ## 📦 Installation
 
