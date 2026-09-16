@@ -1,0 +1,7 @@
+{
+    "author": ["ToHubLab"],
+    "name": "ToHubLab-Cogs",
+    "short": "A collection of custom cogs for Red-DiscordBot.",
+    "description": "Custom cogs made by ToHubLab, including Sticky for keeping messages at the bottom of channels. More cogs coming soon.",
+    "install_msg": "Thank you for adding ToHubLab-Cogs! 🐙\n\nJoin our Discord for support & updates:\nhttps://discord.com/invite/TgYqGq9P3v"
+}
