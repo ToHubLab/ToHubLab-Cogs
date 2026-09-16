@@ -1,0 +1,14 @@
+{
+    "author": ["ToHubLab"],
+    "name": "Sticky",
+    "version": "2.0.0",
+    "short": "Keep a message at the bottom of a channel.",
+    "description": "Automatically reposts a sticky message at the bottom of a channel. Includes an interactive menu, per-channel debounce delays to prevent spam, and a full overview of all active stickies.",
+    "end_user_data_statement": "This cog stores channel IDs, sticky message content, and per-channel delay settings.",
+    "install_msg": "Thank you for installing Sticky v2! 🐙\n\nNew in this version:\n• Interactive menu with `.sticky menu`\n• Per-channel debounce delays\n• Cleaner overview of all stickies\n\nJoin our Discord for support & updates:\nhttps://discord.com/invite/TgYqGq9P3v",
+    "tags": ["utility", "sticky", "message", "automation"],
+    "min_bot_version": "3.5.0",
+    "hidden": false,
+    "disabled": false,
+    "type": "COG"
+}
