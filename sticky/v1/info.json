@@ -1,6 +1,6 @@
 {
     "author": ["ToHubLab"],
-    "name": "Sticky",
+    "name": "Sticky.v1",
     "short": "Keep a message at the bottom of a channel.",
     "description": "Automatically reposts a sticky message at the bottom of a channel when new messages arrive.",
     "end_user_data_statement": "This cog stores channel IDs and message content.",
