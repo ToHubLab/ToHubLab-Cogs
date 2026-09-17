@@ -4,7 +4,7 @@
 
 A collection of custom cogs for Red-DiscordBot V3.5.0 or higher. Built and maintained by ToHubLab.
 <details>
-<summary>📌 Sticky_v2 Cog for Red-DiscordBot</summary>
+<summary>📌 sticky_v2</summary>
 
 # Sticky_v2 Cog for Red-DiscordBot
 
@@ -37,3 +37,9 @@ A powerful cog that keeps a message pinned at the bottom of a Discord channel. W
 ```
 </details>
 </details>
+
+## Support
+
+- **Bug reports & feature requests:** Please open an issue in the repository.
+- **Quick help & general support:**  [![Discord Support](https://img.shields.io/discord/1549415908143792149?logo=discord&label=Discord%20Support)](https://discord.gg/4hQCxUFnB)
+
