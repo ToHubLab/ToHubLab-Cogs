@@ -1,4 +1,4 @@
-# Sticky Cog for Red-DiscordBot
+# Sticky Cog for Red-DiscordBot v 3.5.x
 
 A Red-DiscordBot cog that keeps a message pinned to the bottom of a channel — with text, embeds, components, and clickable command buttons.
 
