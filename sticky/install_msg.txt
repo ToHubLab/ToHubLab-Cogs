@@ -1,0 +1,45 @@
+🐙 Thank you for installing Sticky v4.8!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✨ WHAT'S NEW
+• 🖼️ Embeds — copy stickies 1:1 from any message
+• 🔘 Components — buttons, link buttons, selects
+• ⚙️ Command buttons — trigger real bot commands
+• 🧹 Auto-delete — clean up command replies after X seconds
+• 🌐 Bilingual UI — English & German, switchable live
+• 🐛 Debug mode — detailed logs in a configurable channel
+• ⏱️ Per-channel debounce delays
+• 📋 Individual command button management
+• 🔧 Persistent buttons that survive bot restarts
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚀 QUICK START
+
+Open the interactive menu:
+   > [p]sticky menu
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️ SETTINGS
+
+> [p]sticky settings                — show all settings
+> [p]sticky settings language de    — switch to German de or en for english
+> [p]sticky settings debug on       — enable debug mode or off for disable
+> [p]sticky settings debugchannel   — remove selected debug channel
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📄 Full documentation:
+https://github.com/ToHubLab/ToHubLab-Cogs
+
+💬 Support & updates:
+http://discord.finn-bot.rf.gd
+
+🌐 Website:
+https://finn-bot.rf.gd/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Made with 🦑 by ToHubLab
