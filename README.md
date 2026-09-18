@@ -49,5 +49,5 @@ A powerful cog that keeps a message pinned at the bottom of a Discord channel. W
 ## Support
 
 - **Bug reports & feature requests:** Please open an issue in the repository.
-- **Quick help & general support:**  [![Discord Support](https://img.shields.io/discord/1549415908143792149?logo=discord&label=Discord%20Support)](https://discord.gg/4hQCxUFnB)
+- **Quick help & general support:**  [![Discord Support](https://img.shields.io/discord/1549415908143792149?logo=discord&label=Discord%20Support)](http://discord.finn-bot.rf.gd)
 
