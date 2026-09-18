@@ -6,7 +6,7 @@ A Red-DiscordBot cog that keeps a message pinned to the bottom of a channel — 
 <details>
 <summary>📌 sticky</summary>
 
-# Sticky_v2 Cog for Red-DiscordBot
+# Sticky Cog for Red-DiscordBot
 
 A powerful cog that keeps a message pinned at the bottom of a Discord channel. When new messages arrive, the sticky message automatically moves down — no need to delete and repost manually.
 
