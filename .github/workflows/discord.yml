@@ -1,4 +1,4 @@
-name: Discord Benachrichtigung
+name: Discord Notification
 
 on:
   push:
@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Letzten Commit an Discord senden
+      - name: Send latest commit to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
@@ -27,14 +27,14 @@ jobs:
           payload = {
               "username": "GitHub",
               "embeds": [{
-                  "title": "Neue Änderung im Repository",
+                  "title": "New Repository Update",
                   "description": os.environ["COMMIT_MESSAGE"][:4000],
                   "url": os.environ["COMMIT_URL"],
                   "color": 5814783,
                   "fields": [
                       {
-                          "name": "Autor",
-                          "value": os.environ["AUTHOR"] or "Unbekannt",
+                          "name": "Author",
+                          "value": os.environ["AUTHOR"] or "Unknown",
                           "inline": True
                       },
                       {
@@ -55,5 +55,7 @@ jobs:
 
           with urllib.request.urlopen(request) as response:
               if response.status not in (200, 204):
-                  raise RuntimeError(f"Discord antwortete mit HTTP {response.status}")
+                  raise RuntimeError(
+                      f"Discord returned HTTP {response.status}"
+                  )
           PY
