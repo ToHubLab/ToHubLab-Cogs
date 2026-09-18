@@ -1,13 +1,17 @@
 import asyncio
+import logging
 import re
+import traceback
 
 import discord
 from redbot.core import commands, Config
 
+log = logging.getLogger("red.sticky")
+
 DEFAULT_DELAY = 10
 GITHUB_URL = "https://github.com/ToHubLab"
 WEBSITE_URL = "https://finn-bot.rf.gd/"
-DISCORD_URL = "http://discord.finn-bot.rf.gd/"
+DISCORD_URL = "http://discord.finn-bot.rf.gd"
 
 MESSAGE_LINK_RE = re.compile(
     r"(?:https?://)?(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)"
@@ -19,8 +23,6 @@ MAX_COMPONENT_ROWS = 5
 MAX_COMPONENTS_PER_ROW = 5
 
 CMD_BUTTON_PREFIX = "sticky_cmd"
-
-CAPTURE_WINDOW_SECONDS = 10
 
 
 # ============================================================ TRANSLATIONS ===
@@ -45,7 +47,7 @@ TRANSLATIONS = {
         "debug_on": "✅ Debug mode enabled.",
         "debug_off": "✅ Debug mode disabled.",
         "settings_title": "Sticky Settings",
-        "credits_title": "Sticky - Credits",
+        "credits_title": "Sticky Cog - Credits",
         "credits_desc": "Thank you for using **Sticky**!\nThis cog is maintained by **ToHubLab**.",
         "manage_title": "Sticky in #{channel}",
         "manage_content": "Content",
@@ -74,6 +76,7 @@ TRANSLATIONS = {
         "lang_switched": "🌐 Language switched to **English**.",
         "settings_lang": "Language",
         "settings_debug": "Debug",
+        "settings_debug_channel": "Debug channel",
         "settings_delay": "Default delay",
         "settings_count": "Stickies",
         "settings_hint": "Use the buttons below to change settings.",
@@ -81,7 +84,7 @@ TRANSLATIONS = {
         "credits_btn": "Credits",
         "settings_btn": "Settings",
         "auto_delete_invalid": "❌ Auto-delete must be a number between 0 and 600 (0 = off).",
-        "auto_delete_label": "Auto-delete after X seconds (0 = off)",
+        "auto_delete_label": "Ephemeral delete after Xs (0 = keep)",
         "auto_delete_placeholder": "e.g. 5",
         "cmd_buttons_title": "Command Buttons — #{channel}",
         "cmd_buttons_none": "No command buttons configured for this sticky.",
@@ -91,6 +94,15 @@ TRANSLATIONS = {
         "cmd_buttons_select_first": "❌ Please select a button first.",
         "cmd_buttons_gone": "❌ Button not found (list may have changed).",
         "cmd_button_removed_one": "✅ Removed command button `{label}`.",
+        "debug_channel_set": "✅ Debug channel set to {channel}.",
+        "debug_channel_cleared": "✅ Debug channel cleared.",
+        "debug_pick_channel_title": "Pick a debug channel",
+        "debug_pick_channel_prompt": "🐛 Debug is now **enabled**. Please pick a channel where I should post debug logs:",
+        "debug_channel_saved": "✅ Debug channel set to {channel}.",
+        "debug_channel_skipped": "ℹ️ No debug channel selected. You can set one later with `sticky settings debugchannel #channel`.",
+        "debug_channel_btn": "Debug Channel",
+        "skip": "Skip",
+        "clear": "Clear",
     },
     "de": {
         "sticky_set": "✅ Sticky gesetzt in {channel}.",
@@ -111,7 +123,7 @@ TRANSLATIONS = {
         "debug_on": "✅ Debug-Modus aktiviert.",
         "debug_off": "✅ Debug-Modus deaktiviert.",
         "settings_title": "Sticky-Einstellungen",
-        "credits_title": "Sticky - Credits",
+        "credits_title": "Sticky Cog - Credits",
         "credits_desc": "Danke, dass du **Sticky** nutzt!\nDieser Cog wird von **ToHubLab** gepflegt.",
         "manage_title": "Sticky in #{channel}",
         "manage_content": "Inhalt",
@@ -140,6 +152,7 @@ TRANSLATIONS = {
         "lang_switched": "🌐 Sprache auf **Deutsch** umgestellt.",
         "settings_lang": "Sprache",
         "settings_debug": "Debug",
+        "settings_debug_channel": "Debug-Channel",
         "settings_delay": "Standard-Delay",
         "settings_count": "Stickies",
         "settings_hint": "Nutze die Buttons unten, um die Einstellungen zu ändern.",
@@ -147,8 +160,8 @@ TRANSLATIONS = {
         "credits_btn": "Credits",
         "settings_btn": "Einstellungen",
         "auto_delete_invalid": "❌ Auto-Delete muss eine Zahl zwischen 0 und 600 sein (0 = aus).",
-        "auto_delete_label": "Auto-Delete nach X Sekunden (0 = aus)",
-        "auto_delete_placeholder": "z.B. 5",
+        "auto_delete_label": "Ephemeral löschen nach Xs (0 = behalten)",
+        "auto_delete_placeholder": "z.b. 5",
         "cmd_buttons_title": "Command-Buttons — #{channel}",
         "cmd_buttons_none": "Keine Command-Buttons für dieses Sticky konfiguriert.",
         "cmd_buttons_none_short": "Keine Command-Buttons",
@@ -157,6 +170,15 @@ TRANSLATIONS = {
         "cmd_buttons_select_first": "❌ Bitte zuerst einen Button auswählen.",
         "cmd_buttons_gone": "❌ Button nicht gefunden (Liste evtl. geändert).",
         "cmd_button_removed_one": "✅ Command-Button `{label}` entfernt.",
+        "debug_channel_set": "✅ Debug-Channel auf {channel} gesetzt.",
+        "debug_channel_cleared": "✅ Debug-Channel entfernt.",
+        "debug_pick_channel_title": "Debug-Channel auswählen",
+        "debug_pick_channel_prompt": "🐛 Debug ist jetzt **aktiviert**. Bitte wähle einen Channel, in den ich die Debug-Logs schreiben soll:",
+        "debug_channel_saved": "✅ Debug-Channel auf {channel} gesetzt.",
+        "debug_channel_skipped": "ℹ️ Kein Debug-Channel gewählt. Du kannst ihn später mit `sticky settings debugchannel #channel` setzen.",
+        "debug_channel_btn": "Debug-Channel",
+        "skip": "Überspringen",
+        "clear": "Entfernen",
     },
 }
 
@@ -201,26 +223,30 @@ def parse_emoji(text):
     return text
 
 
+def _parse_stored_emoji(raw):
+    if not raw:
+        return None
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, dict):
+        try:
+            return discord.PartialEmoji(
+                name=raw.get("name") or "_",
+                id=int(raw["id"]),
+                animated=bool(raw.get("animated", False)),
+            )
+        except Exception:
+            return None
+    return None
+
+
 def _emoji_to_partial(stored):
-    """Convert a stored emoji (str or dict) into a form usable in SelectOption."""
     if not stored:
         return None
     if isinstance(stored, str):
         return stored
     if isinstance(stored, dict):
-        eid = stored.get("id")
-        name = stored.get("name")
-        animated = stored.get("animated", False)
-        if eid:
-            try:
-                return discord.PartialEmoji(
-                    name=name or "_",
-                    id=int(eid),
-                    animated=bool(animated),
-                )
-            except Exception:
-                return None
-        return name
+        return _parse_stored_emoji(stored)
     return None
 
 
@@ -462,53 +488,110 @@ class _SyntheticMessage:
         return None
 
 
-# ============================================== COMMAND BUTTON COMPONENTS ===
+class _EphemeralChannelProxy:
+    """Wraps a channel so every .send() call routes to an ephemeral followup."""
 
-def _command_button_to_component(guild_id, channel_id, index, btn):
-    style_val = int(btn.get("style", 2))
-    if style_val not in (1, 2, 3, 4):
-        style_val = 2
+    def __init__(self, real_channel, interaction, delete_after=None):
+        self._real = real_channel
+        self._interaction = interaction
+        self._delete_after = delete_after
 
-    custom_id = f"{CMD_BUTTON_PREFIX}:{guild_id}:{channel_id}:{index}"
-    comp = {
-        "type": 2,
-        "style": style_val,
-        "custom_id": custom_id,
-    }
-    if btn.get("label"):
-        comp["label"] = str(btn["label"])[:80]
-    if btn.get("emoji"):
-        comp["emoji"] = btn["emoji"]
-    if btn.get("disabled"):
-        comp["disabled"] = True
-    return comp
+    @property
+    def __class__(self):
+        return self._real.__class__
 
+    def __getattr__(self, name):
+        return getattr(self._real, name)
 
-def build_command_button_rows(guild_id, channel_id, buttons, start_index=0):
-    rows = []
-    current = []
-    for i, btn in enumerate(buttons):
-        comp = _command_button_to_component(guild_id, channel_id, start_index + i, btn)
-        current.append(comp)
-        if len(current) == MAX_COMPONENTS_PER_ROW:
-            rows.append({"type": 1, "components": current})
-            current = []
-    if current:
-        rows.append({"type": 1, "components": current})
-    return rows
+    async def send(self, content=None, **kwargs):
+        kwargs["ephemeral"] = True
+        if self._delete_after and "delete_after" not in kwargs:
+            kwargs["delete_after"] = self._delete_after
+        try:
+            return await self._interaction.followup.send(content, **kwargs)
+        except Exception:
+            return None
+
+    async def send_ephemeral(self, content=None, **kwargs):
+        return await self.send(content, **kwargs)
 
 
-# ==================================================== RAW COMPONENTS VIEW ===
+# ================================================ STICKY COMMAND BUTTONS ====
 
-class RawComponentsView(discord.ui.View):
-    """Forwards raw component dicts to Discord verbatim."""
+class StickyCommandButton(discord.ui.Button):
+    """A real discord.ui.Button that fires its callback when clicked."""
 
-    def __init__(self, components):
+    def __init__(self, guild_id, channel_id, index, *, label, style, emoji=None):
+        try:
+            btn_style = discord.ButtonStyle(int(style))
+        except (ValueError, TypeError):
+            btn_style = discord.ButtonStyle.secondary
+        if btn_style == discord.ButtonStyle.link:
+            btn_style = discord.ButtonStyle.secondary
+
+        super().__init__(
+            label=(label or "Button")[:80],
+            style=btn_style,
+            custom_id=f"{CMD_BUTTON_PREFIX}:{guild_id}:{channel_id}:{index}",
+            emoji=emoji,
+        )
+        self._sticky_guild_id = guild_id
+        self._sticky_channel_id = channel_id
+        self._sticky_index = index
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.response.is_done():
+            return
+        cog = interaction.client.get_cog("Sticky")
+        if cog is None:
+            return
+        try:
+            await cog._execute_command_from_button(
+                interaction,
+                self._sticky_guild_id,
+                self._sticky_channel_id,
+                self._sticky_index,
+            )
+        except Exception as e:
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        f"❌ {e}", ephemeral=True
+                    )
+            except Exception:
+                pass
+
+
+class StickyView(discord.ui.View):
+    """View holding real command buttons + any raw components from copied msgs."""
+
+    def __init__(self, guild_id, channel_id, command_buttons=None, raw_components=None):
         super().__init__(timeout=None)
-        self._stored = list(components or [])
+        self._raw = list(raw_components or [])
+
+        for i, btn in enumerate((command_buttons or [])[:25]):
+            emoji = _parse_stored_emoji(btn.get("emoji"))
+            try:
+                b = StickyCommandButton(
+                    guild_id=guild_id,
+                    channel_id=channel_id,
+                    index=i,
+                    label=btn.get("label") or "Button",
+                    style=btn.get("style", 2),
+                    emoji=emoji,
+                )
+                self.add_item(b)
+            except Exception:
+                continue
 
     def to_components(self):
-        return self._stored
+        base = list(super().to_components())
+        for row in self._raw:
+            if len(base) >= MAX_COMPONENT_ROWS:
+                break
+            if isinstance(row, dict) and row.get("type") == 1:
+                base.append(row)
+        return base[:MAX_COMPONENT_ROWS]
 
 
 def _build_send_kwargs(data, guild_id, channel_id, command_buttons=None):
@@ -529,18 +612,33 @@ def _build_send_kwargs(data, guild_id, channel_id, command_buttons=None):
     if embeds:
         kwargs["embeds"] = embeds
 
-    all_rows = []
-    if command_buttons:
-        all_rows.extend(build_command_button_rows(guild_id, channel_id, command_buttons))
-    all_rows.extend(components_raw)
-    all_rows = all_rows[:MAX_COMPONENT_ROWS]
-
-    if all_rows:
-        kwargs["view"] = RawComponentsView(all_rows)
+    if command_buttons or components_raw:
+        kwargs["view"] = StickyView(
+            guild_id=guild_id,
+            channel_id=channel_id,
+            command_buttons=command_buttons or [],
+            raw_components=components_raw,
+        )
 
     if not kwargs:
         kwargs["content"] = "\u200b"
     return kwargs
+
+
+# ================================================ BASE VIEW (auto-close) ====
+
+class _AutoCloseView(discord.ui.View):
+    """View that removes its components on timeout so expired buttons
+    don't cause 'app did not respond' errors."""
+
+    async def on_timeout(self):
+        msg = getattr(self, "message", None)
+        if msg is None:
+            return
+        try:
+            await msg.edit(view=None)
+        except Exception:
+            pass
 
 
 # ================================================================= MODALS ===
@@ -562,6 +660,11 @@ class StickyTextModal(discord.ui.Modal):
         self.add_item(self.text_input)
 
     async def on_submit(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+
         content = self.text_input.value
         old = await self.cog._get_data(self.guild, self.channel.id)
 
@@ -574,11 +677,11 @@ class StickyTextModal(discord.ui.Modal):
 
         success, err = await self.cog.apply_sticky(self.guild, self.channel, new_data)
         if success:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 t(self.lang, "sticky_set", channel=self.channel.mention), ephemeral=True
             )
         else:
-            await interaction.response.send_message(f"❌ {err}", ephemeral=True)
+            await interaction.followup.send(f"❌ {err}", ephemeral=True)
 
 
 class MessageLinkModal(discord.ui.Modal):
@@ -639,21 +742,30 @@ class DelayModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+
+        try:
             seconds = int(self.delay_input.value)
             if seconds < 0 or seconds > 600:
                 raise ValueError
         except ValueError:
-            await interaction.response.send_message(t(self.lang, "delay_invalid"), ephemeral=True)
+            await interaction.followup.send(
+                t(self.lang, "delay_invalid"), ephemeral=True
+            )
             return
 
         data = await self.cog._get_data(self.guild, self.channel.id)
         if not data:
-            await interaction.response.send_message(t(self.lang, "no_sticky"), ephemeral=True)
+            await interaction.followup.send(
+                t(self.lang, "no_sticky"), ephemeral=True
+            )
             return
 
         data["delay"] = seconds
         await self.cog._set_data(self.guild, self.channel.id, data)
-        await interaction.response.send_message(
+        await interaction.followup.send(
             t(self.lang, "delay_set", channel=self.channel.mention, seconds=seconds),
             ephemeral=True,
         )
@@ -668,32 +780,32 @@ class CommandButtonModal(discord.ui.Modal):
         self.lang = lang
 
         self.label_input = discord.ui.TextInput(
-            label="Button label",
-            placeholder="z.B. Spiele",
+            label="Button label"[:45],
+            placeholder="e.g. <command>",
             required=True,
             max_length=80,
         )
         self.emoji_input = discord.ui.TextInput(
-            label="Emoji (optional)",
+            label="Emoji (optional)"[:45],
             placeholder="😀 or <:name:1234567890>",
             required=False,
             max_length=100,
         )
         self.style_input = discord.ui.TextInput(
-            label="Style (primary/secondary/success/danger)",
+            label="Style (primary/secondary/success/danger)"[:45],
             default="secondary",
             required=True,
             max_length=20,
         )
         self.command_input = discord.ui.TextInput(
-            label="Command (prefix wird automatisch entfernt)",
-            placeholder="z.B. spiele   oder   .spiele   oder   role add @user Member",
+            label="Command (prefix auto-stripped)"[:45],
+            placeholder="e.g. <command>   or   [p]<command>   or   role add @user Member",
             style=discord.TextStyle.paragraph,
             required=True,
             max_length=500,
         )
         self.auto_delete_input = discord.ui.TextInput(
-            label=t(lang, "auto_delete_label"),
+            label=t(lang, "auto_delete_label")[:45],
             placeholder=t(lang, "auto_delete_placeholder"),
             required=False,
             default="0",
@@ -706,15 +818,22 @@ class CommandButtonModal(discord.ui.Modal):
         self.add_item(self.auto_delete_input)
 
     async def on_submit(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+
         style_key = self.style_input.value.strip().lower()
         style_val = STYLE_MAP.get(style_key)
         if style_val is None or style_val == 5:
-            await interaction.response.send_message(t(self.lang, "invalid_style"), ephemeral=True)
+            await interaction.followup.send(
+                t(self.lang, "invalid_style"), ephemeral=True
+            )
             return
 
         command = self.command_input.value.strip()
         if not command:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 t(self.lang, "command_button_invalid"), ephemeral=True
             )
             return
@@ -728,7 +847,7 @@ class CommandButtonModal(discord.ui.Modal):
                 if auto_delete < 0 or auto_delete > 600:
                     raise ValueError
             except ValueError:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     t(self.lang, "auto_delete_invalid"), ephemeral=True
                 )
                 return
@@ -752,11 +871,21 @@ class CommandButtonModal(discord.ui.Modal):
 
         success, err = await self.cog.apply_sticky(self.guild, self.channel, data)
         if success:
-            await interaction.response.send_message(
+            await self.cog._debug_log(
+                self.guild,
+                f"➕ Command button added: label=`{button['label']}` "
+                f"cmd=`{button['command']}` auto_delete=`{auto_delete}` "
+                f"in <#{self.channel.id}>",
+                "success",
+            )
+            await interaction.followup.send(
                 t(self.lang, "command_button_added", auto=auto_delete), ephemeral=True
             )
         else:
-            await interaction.response.send_message(f"❌ {err}", ephemeral=True)
+            await self.cog._debug_log(
+                self.guild, f"Failed to add command button: {err}", "error"
+            )
+            await interaction.followup.send(f"❌ {err}", ephemeral=True)
 
 
 # ================================================================== VIEWS ===
@@ -793,7 +922,7 @@ class ChannelPickerView(discord.ui.View):
         self.stop()
 
 
-class CreditsView(discord.ui.View):
+class CreditsView(_AutoCloseView):
     def __init__(self, parent=None, lang="en"):
         super().__init__(timeout=300)
         self.parent = parent
@@ -808,7 +937,87 @@ class CreditsView(discord.ui.View):
             await interaction.response.edit_message(content="Closed.", embed=None, view=None)
 
 
-class SettingsView(discord.ui.View):
+class DebugChannelPickerView(_AutoCloseView):
+    """Pick or clear the debug channel."""
+
+    def __init__(self, cog, parent_settings, lang="en"):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.parent_settings = parent_settings
+        self.lang = lang
+
+        self.select = discord.ui.ChannelSelect(
+            placeholder=t(lang, "debug_pick_channel_title"),
+            channel_types=[discord.ChannelType.text],
+            min_values=1,
+            max_values=1,
+            row=0,
+        )
+        self.select.callback = self._on_pick
+        self.add_item(self.select)
+
+        clear = discord.ui.Button(
+            label=t(lang, "clear"),
+            style=discord.ButtonStyle.danger,
+            emoji="🧹",
+            row=1,
+        )
+        clear.callback = self._on_clear
+        self.add_item(clear)
+
+        skip = discord.ui.Button(
+            label=t(lang, "skip"),
+            style=discord.ButtonStyle.secondary,
+            emoji="⏭️",
+            row=1,
+        )
+        skip.callback = self._on_skip
+        self.add_item(skip)
+
+    async def _refresh_parent(self, guild):
+        try:
+            if self.parent_settings is not None and self.parent_settings.message is not None:
+                embed = await self.parent_settings.build_embed()
+                await self.parent_settings.message.edit(
+                    embed=embed, view=self.parent_settings
+                )
+        except Exception:
+            pass
+
+    async def _on_pick(self, interaction: discord.Interaction):
+        if not self.select.values:
+            await interaction.response.send_message("❌ No channel selected.", ephemeral=True)
+            return
+        channel_id = self.select.values[0].id
+        await self.cog.config.guild(interaction.guild).debug_channel.set(channel_id)
+        await self._refresh_parent(interaction.guild)
+        await interaction.response.send_message(
+            t(self.lang, "debug_channel_saved", channel=f"<#{channel_id}>"),
+            ephemeral=True,
+        )
+        await self.cog._debug_log(
+            interaction.guild,
+            f"🐛 Debug channel configured by **{interaction.user}**.",
+            "success",
+        )
+        self.stop()
+
+    async def _on_clear(self, interaction: discord.Interaction):
+        await self.cog.config.guild(interaction.guild).debug_channel.set(None)
+        await self._refresh_parent(interaction.guild)
+        await interaction.response.send_message(
+            t(self.lang, "debug_channel_cleared"), ephemeral=True
+        )
+        self.stop()
+
+    async def _on_skip(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            t(self.lang, "debug_channel_skipped"), ephemeral=True
+        )
+        self.stop()
+
+
+class SettingsView(_AutoCloseView):
     """Settings view: language toggle, debug toggle, credits."""
 
     def __init__(self, cog, parent, lang, debug):
@@ -817,6 +1026,7 @@ class SettingsView(discord.ui.View):
         self.parent = parent
         self.lang = lang
         self.debug = debug
+        self.message = None
         self._build()
 
     def _build(self):
@@ -840,6 +1050,17 @@ class SettingsView(discord.ui.View):
         debug_btn.callback = self._toggle_debug
         self.add_item(debug_btn)
 
+        # Debug-Channel button: only visible when debug is enabled
+        if self.debug:
+            ch_btn = discord.ui.Button(
+                label=t(self.lang, "debug_channel_btn"),
+                style=discord.ButtonStyle.secondary,
+                emoji="📢",
+                row=1,
+            )
+            ch_btn.callback = self._open_debug_channel_picker
+            self.add_item(ch_btn)
+
         credits_btn = discord.ui.Button(
             label=t(self.lang, "credits_btn"),
             style=discord.ButtonStyle.secondary,
@@ -853,7 +1074,7 @@ class SettingsView(discord.ui.View):
             label=t(self.lang, "back"),
             style=discord.ButtonStyle.secondary,
             emoji="◀️",
-            row=1,
+            row=2,
         )
         back_btn.callback = self._go_back
         self.add_item(back_btn)
@@ -861,6 +1082,13 @@ class SettingsView(discord.ui.View):
     async def build_embed(self):
         default_delay = await self.cog.config.guild(self.parent.guild).default_delay()
         channels = await self.cog._all_data(self.parent.guild)
+        debug_ch = await self.cog.config.guild(self.parent.guild).debug_channel()
+
+        if debug_ch:
+            ch = self.parent.guild.get_channel(debug_ch)
+            debug_value = ch.mention if ch else "missing channel"
+        else:
+            debug_value = "not set"
 
         embed = discord.Embed(
             title=t(self.lang, "settings_title"),
@@ -874,12 +1102,17 @@ class SettingsView(discord.ui.View):
             inline=True,
         )
         embed.add_field(
+            name=t(self.lang, "settings_debug_channel"), value=debug_value, inline=True
+        )
+        embed.add_field(
             name=t(self.lang, "settings_delay"), value=f"{default_delay}s", inline=True
         )
         embed.add_field(
             name=t(self.lang, "settings_count"), value=str(len(channels)), inline=True
         )
-        embed.set_footer(text="Sticky - Made by ToHubLab")
+        embed.set_footer(
+            text="Sticky · Made by ToHubLab"
+        )
         return embed
 
     async def _toggle_language(self, interaction: discord.Interaction):
@@ -901,20 +1134,53 @@ class SettingsView(discord.ui.View):
             pass
 
     async def _toggle_debug(self, interaction: discord.Interaction):
+        was_on = self.debug
         self.debug = not self.debug
         await self.cog.config.guild(interaction.guild).debug.set(self.debug)
         self._build()
         embed = await self.build_embed()
         await interaction.response.edit_message(embed=embed, view=self)
         try:
+            self.message = interaction.message
+        except Exception:
+            pass
+
+        try:
             key = "debug_on" if self.debug else "debug_off"
             await interaction.followup.send(t(self.lang, key), ephemeral=True)
         except Exception:
             pass
 
+        if self.debug and not was_on:
+            try:
+                current_ch = await self.cog.config.guild(interaction.guild).debug_channel()
+            except Exception:
+                current_ch = None
+            if not current_ch:
+                picker = DebugChannelPickerView(
+                    self.cog, parent_settings=self, lang=self.lang
+                )
+                try:
+                    await interaction.followup.send(
+                        t(self.lang, "debug_pick_channel_prompt"),
+                        view=picker,
+                        ephemeral=True,
+                    )
+                except Exception:
+                    pass
+
+    async def _open_debug_channel_picker(self, interaction: discord.Interaction):
+        picker = DebugChannelPickerView(self.cog, parent_settings=self, lang=self.lang)
+        await interaction.response.send_message(
+            t(self.lang, "debug_pick_channel_prompt"),
+            view=picker,
+            ephemeral=True,
+        )
+
     async def _show_credits(self, interaction: discord.Interaction):
         embed = build_credits_embed(self.lang)
         view = CreditsView(parent=self, lang=self.lang)
+        view.message = interaction.message
         await interaction.response.edit_message(embed=embed, view=view)
 
     async def _go_back(self, interaction: discord.Interaction):
@@ -925,7 +1191,7 @@ class SettingsView(discord.ui.View):
             await interaction.response.edit_message(content="Closed.", embed=None, view=None)
 
 
-class CommandButtonListView(discord.ui.View):
+class CommandButtonListView(_AutoCloseView):
     """List and remove individual command buttons from a channel's sticky."""
 
     def __init__(self, cog, guild, channel, parent=None, lang="en"):
@@ -936,6 +1202,7 @@ class CommandButtonListView(discord.ui.View):
         self.parent = parent
         self.lang = lang
         self.selected_index = None
+        self.message = None
 
         self.select = discord.ui.Select(
             placeholder=t(lang, "cmd_buttons_placeholder"),
@@ -1097,7 +1364,7 @@ class CommandButtonListView(discord.ui.View):
             await interaction.response.edit_message(content="Closed.", embed=None, view=None)
 
 
-class StickyManageView(discord.ui.View):
+class StickyManageView(_AutoCloseView):
     def __init__(self, cog, guild, channel, parent=None, lang="en"):
         super().__init__(timeout=300)
         self.cog = cog
@@ -1105,6 +1372,7 @@ class StickyManageView(discord.ui.View):
         self.channel = channel
         self.parent = parent
         self.lang = lang
+        self.message = None
 
     async def build_embed(self):
         data = await self.cog._get_data(self.guild, self.channel.id)
@@ -1170,6 +1438,7 @@ class StickyManageView(discord.ui.View):
         view = CommandButtonListView(
             self.cog, self.guild, self.channel, parent=self, lang=self.lang
         )
+        view.message = interaction.message
         await view.refresh_select()
         embed = await view.build_embed()
         await interaction.response.edit_message(embed=embed, view=view)
@@ -1199,7 +1468,7 @@ class StickyManageView(discord.ui.View):
         await self._go_back(interaction)
 
 
-class StickyMenuView(discord.ui.View):
+class StickyMenuView(_AutoCloseView):
     def __init__(self, cog, ctx, lang="en"):
         super().__init__(timeout=300)
         self.cog = cog
@@ -1283,6 +1552,7 @@ class StickyMenuView(discord.ui.View):
             )
             return
         sub_view = StickyManageView(self.cog, self.guild, channel, parent=self, lang=self.lang)
+        sub_view.message = interaction.message
         embed = await sub_view.build_embed()
         await interaction.response.edit_message(embed=embed, view=sub_view)
 
@@ -1317,6 +1587,7 @@ class StickyMenuView(discord.ui.View):
     async def settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         debug = await self.cog.config.guild(interaction.guild).debug()
         view = SettingsView(self.cog, self, self.lang, debug)
+        view.message = interaction.message
         embed = await view.build_embed()
         await interaction.response.edit_message(embed=embed, view=view)
 
@@ -1336,19 +1607,18 @@ class Sticky(commands.Cog):
             default_delay=DEFAULT_DELAY,
             language="en",
             debug=False,
+            debug_channel=None,
         )
         self._timers = {}
         self._locks = {}
         self._running_commands = set()
-        self._auto_delete_tasks = set()
+        self._open_menus = {}  # {channel_id: menu_message_id}
 
     async def cog_unload(self):
         for tsk in self._timers.values():
             tsk.cancel()
         self._timers.clear()
-        for tsk in self._auto_delete_tasks:
-            tsk.cancel()
-        self._auto_delete_tasks.clear()
+        self._open_menus.clear()
 
     # ------------------------------ helpers ------------------------------
 
@@ -1380,6 +1650,52 @@ class Sticky(commands.Cog):
             self._locks[channel_id] = asyncio.Lock()
         return self._locks[channel_id]
 
+    # ---------------------------- debug log -----------------------------
+
+    async def _debug_log(self, guild, message, level="info", exc_info=False):
+        """Log a debug message to console and (if configured) to a channel."""
+        if guild is None:
+            return
+        try:
+            if not await self.config.guild(guild).debug():
+                return
+        except Exception:
+            return
+
+        prefix_map = {
+            "info": "🐛 **INFO**",
+            "warn": "⚠️ **WARN**",
+            "error": "❌ **ERROR**",
+            "success": "✅ **OK**",
+        }
+        prefix = prefix_map.get(level, "🐛")
+
+        log_line = f"[Sticky] {message}"
+        if level == "error":
+            log.error(log_line, exc_info=exc_info)
+        elif level == "warn":
+            log.warning(log_line)
+        else:
+            log.info(log_line)
+
+        try:
+            debug_channel_id = await self.config.guild(guild).debug_channel()
+        except Exception:
+            debug_channel_id = None
+        if not debug_channel_id:
+            return
+
+        ch = guild.get_channel(debug_channel_id)
+        if ch is None:
+            return
+        try:
+            text = f"{prefix} {message}"
+            if len(text) > 1900:
+                text = text[:1897] + "..."
+            await ch.send(text)
+        except Exception:
+            pass
+
     # -------------------------- sticky apply ----------------------------
 
     async def apply_sticky(self, guild, channel, new_data):
@@ -1404,12 +1720,28 @@ class Sticky(commands.Cog):
         try:
             sent = await channel.send(**kwargs)
         except discord.Forbidden:
+            await self._debug_log(
+                guild,
+                f"Forbidden when sending sticky in <#{channel.id}> — check permissions.",
+                "error",
+            )
             return False, t("en", "no_permission_send", channel=channel.mention)
         except discord.HTTPException as e:
+            await self._debug_log(
+                guild,
+                f"HTTPException when sending sticky in <#{channel.id}>: {e}",
+                "error",
+                exc_info=True,
+            )
             return False, f"HTTP error: {e}"
 
         new_data["last_id"] = sent.id
         await self._set_data(guild, channel.id, new_data)
+        await self._debug_log(
+            guild,
+            f"📌 Sticky applied in <#{channel.id}> — new id `{sent.id}`",
+            "success",
+        )
         return True, None
 
     async def _post_sticky(self, guild, channel_id):
@@ -1419,6 +1751,11 @@ class Sticky(commands.Cog):
         channel = guild.get_channel(channel_id)
         if channel is None:
             return
+
+        await self._debug_log(
+            guild,
+            f"📌 Reposting sticky in <#{channel_id}> (old last_id={data.get('last_id')})",
+        )
 
         lock = self._get_lock(channel_id)
         async with lock:
@@ -1436,10 +1773,28 @@ class Sticky(commands.Cog):
                     command_buttons=data.get("command_buttons") or [],
                 )
                 new_msg = await channel.send(**kwargs)
-            except (discord.Forbidden, discord.HTTPException):
+            except discord.Forbidden:
+                await self._debug_log(
+                    guild,
+                    f"Forbidden reposting sticky in <#{channel_id}>",
+                    "error",
+                )
+                return
+            except discord.HTTPException as e:
+                await self._debug_log(
+                    guild,
+                    f"HTTPException reposting sticky in <#{channel_id}>: {e}",
+                    "error",
+                    exc_info=True,
+                )
                 return
             data["last_id"] = new_msg.id
             await self._set_data(guild, channel_id, data)
+            await self._debug_log(
+                guild,
+                f"📌 Reposted — new id `{new_msg.id}`",
+                "success",
+            )
 
     async def _schedule_repost(self, guild, channel_id):
         existing = self._timers.get(channel_id)
@@ -1462,57 +1817,6 @@ class Sticky(commands.Cog):
             pass
         finally:
             self._timers.pop(channel_id, None)
-
-    # ----------------------- auto-delete helper -------------------------
-
-    async def _capture_and_delete_bot_messages(
-        self, channel, delete_after: int, capture_window: int = CAPTURE_WINDOW_SECONDS
-    ):
-        captured = []
-        loop = asyncio.get_event_loop()
-        deadline = loop.time() + capture_window
-
-        while True:
-            remaining = deadline - loop.time()
-            if remaining <= 0:
-                break
-            try:
-                msg = await self.bot.wait_for(
-                    "message",
-                    timeout=remaining,
-                    check=lambda m: (
-                        m.channel.id == channel.id
-                        and self.bot.user is not None
-                        and m.author.id == self.bot.user.id
-                    ),
-                )
-                captured.append(msg)
-            except asyncio.TimeoutError:
-                break
-            except asyncio.CancelledError:
-                return
-
-        if not captured:
-            return
-
-        try:
-            await asyncio.sleep(delete_after)
-        except asyncio.CancelledError:
-            return
-
-        for msg in captured:
-            try:
-                await msg.delete()
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                pass
-
-    def _start_auto_delete(self, channel, delete_after: int):
-        task = asyncio.create_task(
-            self._capture_and_delete_bot_messages(channel, delete_after)
-        )
-        self._auto_delete_tasks.add(task)
-        task.add_done_callback(self._auto_delete_tasks.discard)
-        return task
 
     # ------------------------- command execution ------------------------
 
@@ -1548,12 +1852,26 @@ class Sticky(commands.Cog):
     ):
         lang = await self._lang(interaction.guild)
         debug = await self.config.guild(interaction.guild).debug()
-        data = await self._get_data(interaction.guild, channel_id)
+        guild = interaction.guild
+
+        await self._debug_log(
+            guild,
+            f"Button clicked by **{interaction.user}** (`{interaction.user.id}`) "
+            f"in <#{channel_id}> — guild=`{guild_id}` channel=`{channel_id}` index=`{index}`",
+        )
+
+        data = await self._get_data(guild, channel_id)
         if not data:
+            await self._debug_log(guild, "Abort: no sticky data for this channel.", "warn")
             await interaction.response.send_message(t(lang, "no_sticky"), ephemeral=True)
             return
         buttons = data.get("command_buttons") or []
         if index < 0 or index >= len(buttons):
+            await self._debug_log(
+                guild,
+                f"Abort: index {index} out of range (only {len(buttons)} buttons).",
+                "warn",
+            )
             await interaction.response.send_message(
                 t(lang, "command_not_found", cmd="?"), ephemeral=True
             )
@@ -1561,7 +1879,14 @@ class Sticky(commands.Cog):
 
         button = buttons[index]
         raw_command = (button.get("command") or "").strip()
+        await self._debug_log(
+            guild,
+            f"Resolved button: label=`{button.get('label','?')}` "
+            f"cmd=`{raw_command}` auto_delete=`{button.get('auto_delete',0)}`",
+        )
+
         if not raw_command:
+            await self._debug_log(guild, "Abort: command is empty.", "warn")
             await interaction.response.send_message(
                 t(lang, "command_button_invalid"), ephemeral=True
             )
@@ -1571,11 +1896,16 @@ class Sticky(commands.Cog):
 
         key = (interaction.user.id, interaction.message.id if interaction.message else 0)
         if key in self._running_commands:
+            await self._debug_log(guild, "Abort: duplicate execution guard.", "warn")
             return
         self._running_commands.add(key)
         try:
-            prefixes = await self._resolve_prefixes(interaction.guild, interaction.message)
+            prefixes = await self._resolve_prefixes(guild, interaction.message)
             command_text = self._strip_prefix(raw_command, prefixes)
+            await self._debug_log(
+                guild,
+                f"Prefixes detected: `{prefixes}` — stripped command: `{command_text}`",
+            )
 
             prefix = None
             for p in prefixes:
@@ -1586,49 +1916,107 @@ class Sticky(commands.Cog):
                 prefix = prefixes[0] if prefixes else "!"
 
             full_command = f"{prefix}{command_text}"
+            await self._debug_log(guild, f"Full command to invoke: `{full_command}`")
+
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except Exception as e:
+                await self._debug_log(
+                    guild, f"Defer failed (already done?): {e}", "warn"
+                )
+
+            proxy = _EphemeralChannelProxy(
+                real_channel=interaction.channel,
+                interaction=interaction,
+                delete_after=auto_delete if auto_delete > 0 else None,
+            )
 
             fake_msg = _SyntheticMessage(
                 bot=self.bot,
                 author=interaction.user,
-                channel=interaction.channel,
-                guild=interaction.guild,
+                channel=proxy,
+                guild=guild,
                 content=full_command,
                 message_id=interaction.id,
             )
 
             ctx = await self.bot.get_context(fake_msg)
 
+            async def _ephemeral_send(content=None, **kwargs):
+                kwargs["ephemeral"] = True
+                if auto_delete > 0 and "delete_after" not in kwargs:
+                    kwargs["delete_after"] = auto_delete
+                try:
+                    return await interaction.followup.send(content, **kwargs)
+                except Exception:
+                    return None
+
+            try:
+                ctx.send = _ephemeral_send
+                ctx.reply = _ephemeral_send
+            except Exception:
+                pass
+
             if ctx.command is None:
+                await self._debug_log(
+                    guild,
+                    f"Command NOT found: `{full_command}` — check name/aliases. "
+                    f"Available prefix(es): {prefixes}",
+                    "error",
+                )
                 hint = ""
                 if debug:
                     hint = f"\n```prefix={prefix!r}\nfull={full_command!r}```"
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     t(lang, "command_not_found", cmd=full_command) + hint,
                     ephemeral=True,
                 )
                 return
 
+            await self._debug_log(
+                guild, f"Command resolved: `{ctx.command.qualified_name}`"
+            )
+
             try:
                 can_run = await ctx.command.can_run(ctx)
-            except Exception:
+            except Exception as e:
+                await self._debug_log(
+                    guild, f"can_run raised: {e}", "error", exc_info=True
+                )
                 can_run = False
+
             if not can_run:
-                await interaction.response.send_message(
+                await self._debug_log(
+                    guild,
+                    f"User {interaction.user} has NO permission for "
+                    f"`{ctx.command.qualified_name}`.",
+                    "warn",
+                )
+                await interaction.followup.send(
                     t(lang, "command_no_permission"), ephemeral=True
                 )
                 return
 
-            if auto_delete > 0:
-                self._start_auto_delete(interaction.channel, auto_delete)
-
-            try:
-                await interaction.response.defer(ephemeral=False)
-            except Exception:
-                pass
+            await self._debug_log(
+                guild, f"▶️ Invoking `{ctx.command.qualified_name}` …"
+            )
 
             try:
                 await self.bot.invoke(ctx)
+                await self._debug_log(
+                    guild,
+                    f"✅ Executed `{ctx.command.qualified_name}` successfully.",
+                    "success",
+                )
             except Exception as e:
+                tb = traceback.format_exc()
+                await self._debug_log(
+                    guild,
+                    f"❌ Command `{ctx.command.qualified_name}` raised: "
+                    f"`{type(e).__name__}: {e}`\n```py\n{tb[-1500:]}\n```",
+                    "error",
+                    exc_info=True,
+                )
                 try:
                     await interaction.followup.send(
                         t(lang, "command_error", error=str(e)), ephemeral=True
@@ -1658,6 +2046,8 @@ class Sticky(commands.Cog):
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
+        if interaction.response.is_done():
+            return
         if interaction.type != discord.InteractionType.component:
             return
         data = interaction.data or {}
@@ -1699,10 +2089,23 @@ class Sticky(commands.Cog):
     async def sticky_menu(self, ctx):
         """Open the interactive sticky menu."""
         lang = await self._lang(ctx.guild)
+
+        # Close any previously opened menu in this channel
+        old_id = self._open_menus.get(ctx.channel.id)
+        if old_id:
+            try:
+                old_msg = await ctx.channel.fetch_message(old_id)
+                await old_msg.delete()
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
+            self._open_menus.pop(ctx.channel.id, None)
+
         view = StickyMenuView(self, ctx, lang=lang)
         await view.refresh_select()
         embed = await view.build_embed()
-        view.message = await ctx.send(embed=embed, view=view)
+        msg = await ctx.send(embed=embed, view=view)
+        view.message = msg
+        self._open_menus[ctx.channel.id] = msg.id
 
     @sticky.command(name="set")
     @commands.admin_or_permissions(manage_messages=True)
@@ -1896,13 +2299,17 @@ class Sticky(commands.Cog):
                 pass
 
         debug_on = await self.config.guild(ctx.guild).debug()
-        embed.set_footer(text=f"Debug mode: {'on' if debug_on else 'off'}")
+        debug_ch = await self.config.guild(ctx.guild).debug_channel()
+        ch_txt = f"<#{debug_ch}>" if debug_ch else "not set"
+        embed.set_footer(
+            text=f"Debug mode: {'on' if debug_on else 'off'} · Debug channel: {ch_txt}"
+        )
         await ctx.send(embed=embed)
 
     @sticky.command(name="credits")
     @commands.admin_or_permissions(manage_messages=True)
     async def sticky_credits(self, ctx):
-        """Show the credits."""
+        """Show the credits for this cog."""
         lang = await self._lang(ctx.guild)
         await ctx.send(embed=build_credits_embed(lang))
 
@@ -1911,10 +2318,11 @@ class Sticky(commands.Cog):
     @sticky.group(name="settings", invoke_without_command=True)
     @commands.admin_or_permissions(manage_messages=True)
     async def sticky_settings(self, ctx):
-        """Show or change settings."""
+        """Show or change cog settings."""
         lang = await self._lang(ctx.guild)
         current_lang = await self.config.guild(ctx.guild).language()
         debug = await self.config.guild(ctx.guild).debug()
+        debug_ch = await self.config.guild(ctx.guild).debug_channel()
         default_delay = await self.config.guild(ctx.guild).default_delay()
         channels = await self._all_data(ctx.guild)
 
@@ -1923,17 +2331,23 @@ class Sticky(commands.Cog):
         embed.add_field(
             name=t(lang, "settings_debug"), value="on" if debug else "off", inline=True
         )
+        embed.add_field(
+            name=t(lang, "settings_debug_channel"),
+            value=(f"<#{debug_ch}>" if debug_ch else "not set"),
+            inline=True,
+        )
         embed.add_field(name=t(lang, "settings_delay"), value=f"{default_delay}s", inline=True)
         embed.add_field(name=t(lang, "settings_count"), value=str(len(channels)), inline=True)
         embed.set_footer(
-            text="sticky settings language <en|de> | sticky settings debug <on|off>"
+            text="sticky settings language <en|de> | sticky settings debug <on|off> | "
+            "sticky settings debugchannel [#channel]"
         )
         await ctx.send(embed=embed)
 
     @sticky_settings.command(name="language")
     @commands.admin_or_permissions(manage_messages=True)
     async def sticky_settings_language(self, ctx, lang_code: str):
-        """Set the language for this server (en/de)."""
+        """Set the cog language for this server (en/de)."""
         lang_code = lang_code.lower()
         if lang_code not in TRANSLATIONS:
             await ctx.send(f"❌ Available languages: {', '.join(TRANSLATIONS.keys())}")
@@ -1951,6 +2365,23 @@ class Sticky(commands.Cog):
             await ctx.send(t(lang, "debug_on"))
         else:
             await ctx.send(t(lang, "debug_off"))
+
+    @sticky_settings.command(name="debugchannel")
+    @commands.admin_or_permissions(manage_messages=True)
+    async def sticky_settings_debugchannel(
+        self, ctx, channel: discord.TextChannel = None
+    ):
+        """Set (or clear) the channel where debug logs are posted.
+
+        Run without arguments to clear the debug channel.
+        """
+        lang = await self._lang(ctx.guild)
+        if channel is None:
+            await self.config.guild(ctx.guild).debug_channel.set(None)
+            await ctx.send(t(lang, "debug_channel_cleared"))
+            return
+        await self.config.guild(ctx.guild).debug_channel.set(channel.id)
+        await ctx.send(t(lang, "debug_channel_set", channel=channel.mention))
 
 
 async def setup(bot):
