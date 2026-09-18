@@ -1,3 +1,4 @@
+```yaml
 name: Sticky Discord Notification
 
 on:
@@ -13,7 +14,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check changed files
+        id: changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const before = context.payload.before;
+            const after = context.payload.after;
+
+            const response = await github.rest.repos.compareCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: before,
+              head: after
+            });
+
+            const files = response.data.files || [];
+
+            const stickyFiles = files.filter(file =>
+              file.filename.startsWith("sticky/")
+            );
+
+            core.setOutput(
+              "has_sticky_changes",
+              stickyFiles.length > 0 ? "true" : "false"
+            );
+
+            console.log("Geänderte Dateien:");
+            for (const file of files) {
+              console.log(file.filename);
+            }
+
+            console.log("Sticky Änderungen:", stickyFiles.length);
+
       - name: Send latest Sticky commit to Discord
+        if: steps.changes.outputs.has_sticky_changes == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_STICKY }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
@@ -61,3 +96,5 @@ jobs:
                       f"Discord returned HTTP {response.status}"
                   )
           PY
+```
+ 
