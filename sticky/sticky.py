@@ -11,7 +11,7 @@ log = logging.getLogger("red.sticky")
 DEFAULT_DELAY = 10
 GITHUB_URL = "https://github.com/ToHubLab"
 WEBSITE_URL = "https://finn-bot.rf.gd/"
-DISCORD_URL = "http://discord.finn-bot.rf.gd"
+DISCORD_URL = "https://discord.finn-bot.rf.gd"
 
 MESSAGE_LINK_RE = re.compile(
     r"(?:https?://)?(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)"
@@ -161,7 +161,7 @@ TRANSLATIONS = {
         "settings_btn": "Einstellungen",
         "auto_delete_invalid": "❌ Auto-Delete muss eine Zahl zwischen 0 und 600 sein (0 = aus).",
         "auto_delete_label": "Ephemeral löschen nach Xs (0 = behalten)",
-        "auto_delete_placeholder": "z.b. 5",
+        "auto_delete_placeholder": "z.B. 5",
         "cmd_buttons_title": "Command-Buttons — #{channel}",
         "cmd_buttons_none": "Keine Command-Buttons für dieses Sticky konfiguriert.",
         "cmd_buttons_none_short": "Keine Command-Buttons",
@@ -400,7 +400,7 @@ def build_credits_embed(lang="en"):
         ),
         inline=False,
     )
-    embed.set_footer(text="Sticky - Made by ToHubLab")
+    embed.set_footer(text="Sticky v4.8 - Made by ToHubLab")
     return embed
 
 
@@ -781,7 +781,7 @@ class CommandButtonModal(discord.ui.Modal):
 
         self.label_input = discord.ui.TextInput(
             label="Button label"[:45],
-            placeholder="e.g. <command>",
+            placeholder="z.B. Spiele",
             required=True,
             max_length=80,
         )
@@ -799,7 +799,7 @@ class CommandButtonModal(discord.ui.Modal):
         )
         self.command_input = discord.ui.TextInput(
             label="Command (prefix auto-stripped)"[:45],
-            placeholder="e.g. <command>   or   [p]<command>   or   role add @user Member",
+            placeholder="z.B. spiele   oder   .spiele   oder   role add @user Member",
             style=discord.TextStyle.paragraph,
             required=True,
             max_length=500,
@@ -1111,7 +1111,7 @@ class SettingsView(_AutoCloseView):
             name=t(self.lang, "settings_count"), value=str(len(channels)), inline=True
         )
         embed.set_footer(
-            text="Sticky · Made by ToHubLab"
+            text="Sticky v4.8 · sticky settings debugchannel #channel"
         )
         return embed
 
@@ -1653,7 +1653,11 @@ class Sticky(commands.Cog):
     # ---------------------------- debug log -----------------------------
 
     async def _debug_log(self, guild, message, level="info", exc_info=False):
-        """Log a debug message to console and (if configured) to a channel."""
+        """Log a debug message to console and (if configured) to a channel.
+
+        The channel send is fire-and-forget, so command execution isn't
+        blocked by Discord API latency.
+        """
         if guild is None:
             return
         try:
@@ -1688,11 +1692,21 @@ class Sticky(commands.Cog):
         ch = guild.get_channel(debug_channel_id)
         if ch is None:
             return
+
+        text = f"{prefix} {message}"
+        if len(text) > 1900:
+            text = text[:1897] + "..."
+
+        # Fire-and-forget: don't await the send, schedule it as a task.
         try:
-            text = f"{prefix} {message}"
-            if len(text) > 1900:
-                text = text[:1897] + "..."
-            await ch.send(text)
+            asyncio.create_task(self._safe_debug_send(ch, text))
+        except Exception:
+            pass
+
+    async def _safe_debug_send(self, channel, text):
+        """Send a debug message, swallowing errors (channel might be gone)."""
+        try:
+            await channel.send(text)
         except Exception:
             pass
 
@@ -1850,56 +1864,65 @@ class Sticky(commands.Cog):
     async def _execute_command_from_button(
         self, interaction: discord.Interaction, guild_id: int, channel_id: int, index: int
     ):
-        lang = await self._lang(interaction.guild)
-        debug = await self.config.guild(interaction.guild).debug()
-        guild = interaction.guild
-
-        await self._debug_log(
-            guild,
-            f"Button clicked by **{interaction.user}** (`{interaction.user.id}`) "
-            f"in <#{channel_id}> — guild=`{guild_id}` channel=`{channel_id}` index=`{index}`",
-        )
-
-        data = await self._get_data(guild, channel_id)
-        if not data:
-            await self._debug_log(guild, "Abort: no sticky data for this channel.", "warn")
-            await interaction.response.send_message(t(lang, "no_sticky"), ephemeral=True)
-            return
-        buttons = data.get("command_buttons") or []
-        if index < 0 or index >= len(buttons):
-            await self._debug_log(
-                guild,
-                f"Abort: index {index} out of range (only {len(buttons)} buttons).",
-                "warn",
-            )
-            await interaction.response.send_message(
-                t(lang, "command_not_found", cmd="?"), ephemeral=True
-            )
-            return
-
-        button = buttons[index]
-        raw_command = (button.get("command") or "").strip()
-        await self._debug_log(
-            guild,
-            f"Resolved button: label=`{button.get('label','?')}` "
-            f"cmd=`{raw_command}` auto_delete=`{button.get('auto_delete',0)}`",
-        )
-
-        if not raw_command:
-            await self._debug_log(guild, "Abort: command is empty.", "warn")
-            await interaction.response.send_message(
-                t(lang, "command_button_invalid"), ephemeral=True
-            )
-            return
-
-        auto_delete = int(button.get("auto_delete", 0) or 0)
-
+        # 1️⃣ Duplicate guard setzen BEVOR irgendein await läuft
         key = (interaction.user.id, interaction.message.id if interaction.message else 0)
         if key in self._running_commands:
-            await self._debug_log(guild, "Abort: duplicate execution guard.", "warn")
             return
         self._running_commands.add(key)
+
         try:
+            # 2️⃣ SOFORT defer() — noch vor jedem Netzwerk-Call
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except Exception:
+                # Schon quittiert oder abgelaufen → stiller Abbruch
+                return
+
+            # 3️⃣ Erst JETZT Logs & Config lesen (dauert)
+            lang = await self._lang(interaction.guild)
+            debug = await self.config.guild(interaction.guild).debug()
+            guild = interaction.guild
+
+            await self._debug_log(
+                guild,
+                f"Button clicked by **{interaction.user}** (`{interaction.user.id}`) "
+                f"in <#{channel_id}> — guild=`{guild_id}` channel=`{channel_id}` index=`{index}`",
+            )
+
+            data = await self._get_data(guild, channel_id)
+            if not data:
+                await self._debug_log(guild, "Abort: no sticky data for this channel.", "warn")
+                await interaction.followup.send(t(lang, "no_sticky"), ephemeral=True)
+                return
+            buttons = data.get("command_buttons") or []
+            if index < 0 or index >= len(buttons):
+                await self._debug_log(
+                    guild,
+                    f"Abort: index {index} out of range (only {len(buttons)} buttons).",
+                    "warn",
+                )
+                await interaction.followup.send(
+                    t(lang, "command_not_found", cmd="?"), ephemeral=True
+                )
+                return
+
+            button = buttons[index]
+            raw_command = (button.get("command") or "").strip()
+            await self._debug_log(
+                guild,
+                f"Resolved button: label=`{button.get('label','?')}` "
+                f"cmd=`{raw_command}` auto_delete=`{button.get('auto_delete',0)}`",
+            )
+
+            if not raw_command:
+                await self._debug_log(guild, "Abort: command is empty.", "warn")
+                await interaction.followup.send(
+                    t(lang, "command_button_invalid"), ephemeral=True
+                )
+                return
+
+            auto_delete = int(button.get("auto_delete", 0) or 0)
+
             prefixes = await self._resolve_prefixes(guild, interaction.message)
             command_text = self._strip_prefix(raw_command, prefixes)
             await self._debug_log(
@@ -1917,13 +1940,6 @@ class Sticky(commands.Cog):
 
             full_command = f"{prefix}{command_text}"
             await self._debug_log(guild, f"Full command to invoke: `{full_command}`")
-
-            try:
-                await interaction.response.defer(ephemeral=True)
-            except Exception as e:
-                await self._debug_log(
-                    guild, f"Defer failed (already done?): {e}", "warn"
-                )
 
             proxy = _EphemeralChannelProxy(
                 real_channel=interaction.channel,
