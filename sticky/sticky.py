@@ -11,7 +11,7 @@ log = logging.getLogger("red.sticky")
 DEFAULT_DELAY = 10
 GITHUB_URL = "https://github.com/ToHubLab"
 WEBSITE_URL = "https://finn-bot.rf.gd/"
-DISCORD_URL = "https://discord.finn-bot.rf.gd"
+DISCORD_URL = "http://discord.finn-bot.rf.gd"
 
 MESSAGE_LINK_RE = re.compile(
     r"(?:https?://)?(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)"
