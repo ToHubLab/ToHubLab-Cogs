@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import time
 import traceback
 
 import discord
@@ -23,6 +24,8 @@ MAX_COMPONENT_ROWS = 5
 MAX_COMPONENTS_PER_ROW = 5
 
 CMD_BUTTON_PREFIX = "sticky_cmd"
+CHECK_INTERVAL = 60
+RECENT_POST_TTL = 15
 
 
 # ============================================================ TRANSLATIONS ===
@@ -1050,7 +1053,6 @@ class SettingsView(_AutoCloseView):
         debug_btn.callback = self._toggle_debug
         self.add_item(debug_btn)
 
-        # Debug-Channel button: only visible when debug is enabled
         if self.debug:
             ch_btn = discord.ui.Button(
                 label=t(self.lang, "debug_channel_btn"),
@@ -1455,6 +1457,7 @@ class StickyManageView(_AutoCloseView):
     async def remove(self, interaction: discord.Interaction, button: discord.ui.Button):
         data = await self.cog._get_data(self.guild, self.channel.id)
         if data and data.get("last_id"):
+            self.cog._mark_internal_delete(data["last_id"])
             try:
                 msg = await self.channel.fetch_message(data["last_id"])
                 await msg.delete()
@@ -1612,13 +1615,26 @@ class Sticky(commands.Cog):
         self._timers = {}
         self._locks = {}
         self._running_commands = set()
-        self._open_menus = {}  # {channel_id: menu_message_id}
+        self._open_menus = {}
+        self._internal_deletes = {}
+        self._check_task = None
+        self._repost_again = {}
+        self._recent_posts = {}
+
+    async def cog_load(self):
+        self._check_task = asyncio.create_task(self._sticky_check_loop())
 
     async def cog_unload(self):
+        if self._check_task is not None:
+            self._check_task.cancel()
+            self._check_task = None
         for tsk in self._timers.values():
             tsk.cancel()
         self._timers.clear()
         self._open_menus.clear()
+        self._internal_deletes.clear()
+        self._repost_again.clear()
+        self._recent_posts.clear()
 
     # ------------------------------ helpers ------------------------------
 
@@ -1650,14 +1666,21 @@ class Sticky(commands.Cog):
             self._locks[channel_id] = asyncio.Lock()
         return self._locks[channel_id]
 
+    # ---------------------- internal delete tracking --------------------
+
+    def _mark_internal_delete(self, message_id):
+        if message_id:
+            self._internal_deletes[int(message_id)] = time.monotonic()
+
+    def _is_internal_delete(self, message_id):
+        ts = self._internal_deletes.pop(int(message_id), None)
+        if ts is None:
+            return False
+        return (time.monotonic() - ts) < 60
+
     # ---------------------------- debug log -----------------------------
 
     async def _debug_log(self, guild, message, level="info", exc_info=False):
-        """Log a debug message to console and (if configured) to a channel.
-
-        The channel send is fire-and-forget, so command execution isn't
-        blocked by Discord API latency.
-        """
         if guild is None:
             return
         try:
@@ -1697,14 +1720,12 @@ class Sticky(commands.Cog):
         if len(text) > 1900:
             text = text[:1897] + "..."
 
-        # Fire-and-forget: don't await the send, schedule it as a task.
         try:
             asyncio.create_task(self._safe_debug_send(ch, text))
         except Exception:
             pass
 
     async def _safe_debug_send(self, channel, text):
-        """Send a debug message, swallowing errors (channel might be gone)."""
         try:
             await channel.send(text)
         except Exception:
@@ -1716,6 +1737,7 @@ class Sticky(commands.Cog):
         old = await self._get_data(guild, channel.id)
 
         if old and old.get("last_id"):
+            self._mark_internal_delete(old["last_id"])
             try:
                 old_msg = await channel.fetch_message(old["last_id"])
                 await old_msg.delete()
@@ -1751,6 +1773,7 @@ class Sticky(commands.Cog):
 
         new_data["last_id"] = sent.id
         await self._set_data(guild, channel.id, new_data)
+        self._recent_posts[sent.id] = time.monotonic()
         await self._debug_log(
             guild,
             f"📌 Sticky applied in <#{channel.id}> — new id `{sent.id}`",
@@ -1758,79 +1781,264 @@ class Sticky(commands.Cog):
         )
         return True, None
 
-    async def _post_sticky(self, guild, channel_id):
-        data = await self._get_data(guild, channel_id)
-        if not data:
-            return
+    # ---------------------- sticky repost (locked) ----------------------
+
+    async def _post_sticky(self, guild, channel_id, only_if_missing=False):
+        lock = self._get_lock(channel_id)
+        async with lock:
+            await self._post_sticky_locked(guild, channel_id, only_if_missing)
+
+    async def _post_sticky_locked(self, guild, channel_id, only_if_missing=False):
         channel = guild.get_channel(channel_id)
         if channel is None:
             return
 
+        data = await self._get_data(guild, channel_id)
+        if not data:
+            return
+
+        if only_if_missing and data.get("last_id"):
+            try:
+                existing = await channel.fetch_message(data["last_id"])
+                if existing and existing.author.id == self.bot.user.id:
+                    return
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
+
         await self._debug_log(
             guild,
-            f"📌 Reposting sticky in <#{channel_id}> (old last_id={data.get('last_id')})",
+            f"📌 Reposting sticky in <#{channel_id}> "
+            f"(old last_id={data.get('last_id')})",
         )
 
-        lock = self._get_lock(channel_id)
-        async with lock:
-            if data.get("last_id"):
-                try:
-                    old = await channel.fetch_message(data["last_id"])
-                    await old.delete()
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                    pass
+        if data.get("last_id"):
+            self._mark_internal_delete(data["last_id"])
             try:
-                kwargs = _build_send_kwargs(
-                    data,
-                    guild_id=guild.id,
-                    channel_id=channel_id,
-                    command_buttons=data.get("command_buttons") or [],
-                )
-                new_msg = await channel.send(**kwargs)
-            except discord.Forbidden:
-                await self._debug_log(
-                    guild,
-                    f"Forbidden reposting sticky in <#{channel_id}>",
-                    "error",
-                )
-                return
-            except discord.HTTPException as e:
-                await self._debug_log(
-                    guild,
-                    f"HTTPException reposting sticky in <#{channel_id}>: {e}",
-                    "error",
-                    exc_info=True,
-                )
-                return
-            data["last_id"] = new_msg.id
-            await self._set_data(guild, channel_id, data)
+                old = await channel.fetch_message(data["last_id"])
+                await old.delete()
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
+
+        try:
+            kwargs = _build_send_kwargs(
+                data,
+                guild_id=guild.id,
+                channel_id=channel_id,
+                command_buttons=data.get("command_buttons") or [],
+            )
+            new_msg = await channel.send(**kwargs)
+        except discord.Forbidden:
+            await self._debug_log(
+                guild, f"Forbidden reposting sticky in <#{channel_id}>", "error"
+            )
+            return
+        except discord.HTTPException as e:
             await self._debug_log(
                 guild,
-                f"📌 Reposted — new id `{new_msg.id}`",
-                "success",
+                f"HTTPException reposting sticky in <#{channel_id}>: {e}",
+                "error",
+                exc_info=True,
             )
+            return
 
-    async def _schedule_repost(self, guild, channel_id):
-        existing = self._timers.get(channel_id)
-        if existing and not existing.done():
-            existing.cancel()
-        self._timers[channel_id] = asyncio.create_task(
-            self._debounced_repost(guild, channel_id)
+        data["last_id"] = new_msg.id
+        await self._set_data(guild, channel_id, data)
+        self._recent_posts[new_msg.id] = time.monotonic()
+        await self._debug_log(
+            guild, f"📌 Reposted — new id `{new_msg.id}`", "success"
         )
 
-    async def _debounced_repost(self, guild, channel_id):
+    # ---------------------- duplicate detection -------------------------
+
+    async def _find_sticky_duplicates(self, guild, channel, data, keep_id=None):
+        dupes = []
+        target_prefix = f"{CMD_BUTTON_PREFIX}:{guild.id}:{channel.id}:"
+        has_buttons = bool(data.get("command_buttons"))
+        content = (data.get("content") or "").strip()
+        now = time.monotonic()
+
         try:
+            async for msg in channel.history(limit=100):
+                if msg.author.id != self.bot.user.id:
+                    continue
+                if keep_id and msg.id == keep_id:
+                    continue
+                posted_at = self._recent_posts.get(msg.id)
+                if posted_at and (now - posted_at) < RECENT_POST_TTL:
+                    continue
+                match = False
+                for row in msg.components or []:
+                    for comp in getattr(row, "children", []) or []:
+                        cid = getattr(comp, "custom_id", None)
+                        if cid and cid.startswith(target_prefix):
+                            match = True
+                            break
+                    if match:
+                        break
+                if not match and not has_buttons and content:
+                    if msg.content.strip() == content:
+                        match = True
+                if match:
+                    dupes.append(msg)
+        except discord.HTTPException:
+            pass
+
+        return dupes
+
+    # ---------------------- ensure single sticky ------------------------  # <-- GEAENDERT
+
+    async def _ensure_single_sticky(self, guild, channel_id, force_repost=False):
+        """Guarantee exactly ONE sticky in the channel.
+
+        force_repost=False: only repost if the tracked sticky is missing.
+        force_repost=True:  always delete the tracked sticky and post a
+                            fresh one (so the sticky moves to the bottom
+                            after new user messages).
+        """
+        channel = guild.get_channel(channel_id)
+        if channel is None:
+            return
+        lock = self._get_lock(channel_id)
+        async with lock:
             data = await self._get_data(guild, channel_id)
             if not data:
                 return
-            default_delay = await self.config.guild(guild).default_delay()
-            delay = data.get("delay", default_delay)
-            await asyncio.sleep(delay)
-            await self._post_sticky(guild, channel_id)
+
+            last_id = data.get("last_id")
+            tracked_ok = False
+            if last_id and not force_repost:
+                posted_at = self._recent_posts.get(int(last_id))
+                if posted_at and (time.monotonic() - posted_at) < RECENT_POST_TTL:
+                    tracked_ok = True
+                else:
+                    try:
+                        msg = await channel.fetch_message(last_id)
+                        if msg and msg.author.id == self.bot.user.id:
+                            tracked_ok = True
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        tracked_ok = False
+
+            keep_id = last_id if (tracked_ok and not force_repost) else None
+            dupes = await self._find_sticky_duplicates(
+                guild, channel, data, keep_id=keep_id
+            )
+            for dupe in dupes:
+                self._mark_internal_delete(dupe.id)
+                try:
+                    await dupe.delete()
+                    await self._debug_log(
+                        guild,
+                        f"🧹 Removed duplicate sticky `{dupe.id}` in <#{channel_id}>.",
+                        "warn",
+                    )
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
+
+            # When forcing, also delete the tracked one — it might be in
+            # the recent-posts cache, so _find_sticky_duplicates skipped it.
+            if force_repost and last_id:
+                self._mark_internal_delete(last_id)
+                try:
+                    tracked = await channel.fetch_message(last_id)
+                    await tracked.delete()
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
+
+            if force_repost or not tracked_ok:
+                if force_repost:
+                    await self._debug_log(
+                        guild,
+                        f"🔁 Force-reposting sticky in <#{channel_id}> "
+                        f"(move to bottom).",
+                        "warn",
+                    )
+                else:
+                    await self._debug_log(
+                        guild,
+                        f"🔁 Sticky missing in <#{channel_id}> — reposting.",
+                        "warn",
+                    )
+                data["last_id"] = None
+                await self._set_data(guild, channel_id, data)
+                await self._post_sticky_locked(
+                    guild, channel_id, only_if_missing=False
+                )
+
+    # ---------------------- periodic check loop -------------------------
+
+    async def _sticky_check_loop(self):
+        await self.bot.wait_until_ready()
+        while True:
+            try:
+                await asyncio.sleep(CHECK_INTERVAL)
+
+                # Prune stale recent-post markers
+                now = time.monotonic()
+                for mid in [m for m, ts in self._recent_posts.items()
+                            if now - ts > 60]:
+                    self._recent_posts.pop(mid, None)
+
+                for guild in list(self.bot.guilds):
+                    try:
+                        channels = await self._all_data(guild)
+                    except Exception:
+                        continue
+                    for ch_id in list(channels.keys()):
+                        try:
+                            await self._ensure_single_sticky(guild, int(ch_id))
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as e:
+                            log.warning(
+                                f"[Sticky] periodic check failed for "
+                                f"guild={guild.id} channel={ch_id}: {e}"
+                            )
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                log.error(f"[Sticky] check loop crashed: {e}", exc_info=True)
+                try:
+                    await asyncio.sleep(30)
+                except asyncio.CancelledError:
+                    return
+
+    # ---------------------- debounce worker (no cancel) -----------------
+
+    async def _schedule_repost(self, guild, channel_id):
+        """Signal that a repost is needed. Never cancels a running worker."""
+        existing = self._timers.get(channel_id)
+        if existing and not existing.done():
+            self._repost_again[channel_id] = True
+            return
+        self._repost_again[channel_id] = False
+        self._timers[channel_id] = asyncio.create_task(
+            self._repost_worker(guild, channel_id)
+        )
+
+    async def _repost_worker(self, guild, channel_id):   # <-- GEAENDERT
+        """Debounced repost worker. Never cancelled mid-post."""
+        try:
+            while True:
+                self._repost_again[channel_id] = False
+                data = await self._get_data(guild, channel_id)
+                if not data:
+                    return
+                default_delay = await self.config.guild(guild).default_delay()
+                delay = data.get("delay", default_delay)
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                if self._repost_again.get(channel_id):
+                    continue  # new trigger during sleep → restart debounce
+                # User message arrived → sticky must move to the bottom.
+                await self._ensure_single_sticky(
+                    guild, channel_id, force_repost=True
+                )
+                return
         except asyncio.CancelledError:
-            pass
+            raise
         finally:
             self._timers.pop(channel_id, None)
+            self._repost_again.pop(channel_id, None)
 
     # ------------------------- command execution ------------------------
 
@@ -1864,21 +2072,17 @@ class Sticky(commands.Cog):
     async def _execute_command_from_button(
         self, interaction: discord.Interaction, guild_id: int, channel_id: int, index: int
     ):
-        # 1️⃣ Duplicate guard setzen BEVOR irgendein await läuft
         key = (interaction.user.id, interaction.message.id if interaction.message else 0)
         if key in self._running_commands:
             return
         self._running_commands.add(key)
 
         try:
-            # 2️⃣ SOFORT defer() — noch vor jedem Netzwerk-Call
             try:
                 await interaction.response.defer(ephemeral=True)
             except Exception:
-                # Schon quittiert oder abgelaufen → stiller Abbruch
                 return
 
-            # 3️⃣ Erst JETZT Logs & Config lesen (dauert)
             lang = await self._lang(interaction.guild)
             debug = await self.config.guild(interaction.guild).debug()
             guild = interaction.guild
@@ -2061,6 +2265,47 @@ class Sticky(commands.Cog):
         await self._schedule_repost(message.guild, message.channel.id)
 
     @commands.Cog.listener()
+    async def on_message_delete(self, message: discord.Message):
+        if not message.guild:
+            return
+        if message.id in self._internal_deletes:
+            self._internal_deletes.pop(message.id, None)
+            return
+
+        data = await self._get_data(message.guild, message.channel.id)
+        if not data:
+            return
+
+        if message.id == data.get("last_id"):
+            await self._debug_log(
+                message.guild,
+                f"🗑️ Sticky message in <#{message.channel.id}> was deleted "
+                f"— reposting.",
+                "warn",
+            )
+            await self._ensure_single_sticky(message.guild, message.channel.id)
+
+    @commands.Cog.listener()
+    async def on_bulk_message_delete(self, messages):
+        if not messages:
+            return
+        guild = messages[0].guild
+        if guild is None:
+            return
+
+        seen_channels = set()
+        for m in messages:
+            if m.channel.id in seen_channels:
+                continue
+            seen_channels.add(m.channel.id)
+
+            data = await self._get_data(guild, m.channel.id)
+            if not data:
+                continue
+
+            await self._ensure_single_sticky(guild, m.channel.id)
+
+    @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
         if interaction.response.is_done():
             return
@@ -2106,7 +2351,6 @@ class Sticky(commands.Cog):
         """Open the interactive sticky menu."""
         lang = await self._lang(ctx.guild)
 
-        # Close any previously opened menu in this channel
         old_id = self._open_menus.get(ctx.channel.id)
         if old_id:
             try:
@@ -2219,6 +2463,7 @@ class Sticky(commands.Cog):
             await ctx.send(t(lang, "no_sticky"))
             return
         if data.get("last_id"):
+            self._mark_internal_delete(data["last_id"])
             try:
                 msg = await channel.fetch_message(data["last_id"])
                 await msg.delete()
@@ -2226,6 +2471,24 @@ class Sticky(commands.Cog):
                 pass
         await self._del_data(ctx.guild, channel.id)
         await ctx.send(t(lang, "sticky_removed", channel=channel.mention))
+
+    @sticky.command(name="check")
+    @commands.admin_or_permissions(manage_messages=True)
+    async def sticky_check(self, ctx):
+        """Manually verify all stickies in this server (removes duplicates)."""
+        lang = await self._lang(ctx.guild)
+        channels = await self._all_data(ctx.guild)
+        if not channels:
+            await ctx.send(t(lang, "no_stickies"))
+            return
+        count = 0
+        for ch_id in channels.keys():
+            ch = ctx.guild.get_channel(int(ch_id))
+            if ch is None:
+                continue
+            await self._ensure_single_sticky(ctx.guild, int(ch_id))
+            count += 1
+        await ctx.send(f"✅ Checked **{count}** sticky channel(s).")
 
     @sticky.command(name="delay")
     @commands.admin_or_permissions(manage_messages=True)
@@ -2396,7 +2659,7 @@ class Sticky(commands.Cog):
             await self.config.guild(ctx.guild).debug_channel.set(None)
             await ctx.send(t(lang, "debug_channel_cleared"))
             return
-        await self.config.guild(ctx.guild).debug_channel.set(channel.id)
+        await self.config.guild(ctx.guild).debug_channel.set(channel_id := channel.id)
         await ctx.send(t(lang, "debug_channel_set", channel=channel.mention))
 
 
