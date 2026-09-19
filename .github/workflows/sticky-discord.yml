@@ -13,32 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check changed files
-        id: changes
-        run: |
-          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            # Neuer Branch: Alle Dateien im Push als geändert betrachten
-            CHANGED_FILES=$(git diff --name-only "${{ github.event.after }}^" "${{ github.event.after }}" 2>/dev/null || echo "")
-          else
-            CHANGED_FILES=$(git diff --name-only "${{ github.event.before }}" "${{ github.event.after }}")
-          fi
-
-          echo "Geänderte Dateien:"
-          echo "$CHANGED_FILES"
-
-          if echo "$CHANGED_FILES" | grep -q "^sticky/"; then
-            echo "has_sticky_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_sticky_changes=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Send latest Sticky commit to Discord
-        if: steps.changes.outputs.has_sticky_changes == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_STICKY }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
