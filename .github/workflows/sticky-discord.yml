@@ -20,53 +20,60 @@ jobs:
           COMMIT_URL: ${{ github.event.head_commit.html_url }}
           COMMIT_SHA: ${{ github.event.head_commit.id }}
           AUTHOR: ${{ github.event.head_commit.author.name }}
-          AUTHOR_URL: https://github.com/${{ github.event.head_commit.author.username }}
+          AUTHOR_USERNAME: ${{ github.event.head_commit.author.username }}
           BRANCH: ${{ github.ref_name }}
-          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
         run: |
           python3 - <<'PY'
           import json
           import os
           import urllib.request
           import urllib.error
+          import datetime
 
           sha = os.environ["COMMIT_SHA"]
-          repo_url = os.environ["REPO_URL"]
+          short_sha = sha[:7]
+          repo = os.environ["REPO"]
           commit_url = os.environ["COMMIT_URL"]
-          author_url = os.environ["AUTHOR_URL"]
+          branch = os.environ["BRANCH"]
+          author = os.environ["AUTHOR"] or "Unknown"
+          author_username = os.environ.get("AUTHOR_USERNAME", "").strip()
+          before = os.environ.get("BEFORE", "").strip()
 
-          # Direktlink auf die geänderten Dateien des Commits
+          repo_url = f"https://github.com/{repo}"
           files_url = f"{commit_url}/files"
+          branch_url = f"{repo_url}/tree/{branch}"
+          author_url = f"https://github.com/{author_username}" if author_username else repo_url
+
+          links = [
+              f"[`{short_sha}`]({commit_url})",
+              f"[View changes]({files_url})",
+          ]
+          if before and set(before) != {"0"}:
+              links.append(f"[Full diff]({repo_url}/compare/{before}...{sha})")
+
+          embed = {
+              "title": "New Sticky Update",
+              "url": commit_url,
+              "description": os.environ["COMMIT_MESSAGE"][:4000],
+              "color": 0x5865F2,
+              "author": {"name": author, "url": author_url},
+              "fields": [
+                  {"name": "Branch", "value": f"[`{branch}`]({branch_url})", "inline": True},
+                  {"name": "Commit", "value": f"[`{short_sha}`]({commit_url})", "inline": True},
+                  {"name": "Links", "value": " · ".join(links), "inline": False},
+              ],
+              "footer": {"text": repo},
+              "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+          }
+
+          if author_username:
+              embed["author"]["icon_url"] = f"https://github.com/{author_username}.png"
 
           payload = {
               "username": "GitHub Sticky",
-              "embeds": [{
-                  "title": "New Sticky Update",
-                  "description": os.environ["COMMIT_MESSAGE"][:4000],
-                  "url": commit_url,
-                  "color": 5814783,
-                  "fields": [
-                      {
-                          "name": "Author",
-                          "value": f"[{os.environ['AUTHOR'] or 'Unknown'}]({author_url})",
-                          "inline": True
-                      },
-                      {
-                          "name": "Branch",
-                          "value": f"[{os.environ['BRANCH']}]({repo_url}/tree/{os.environ['BRANCH']})",
-                          "inline": True
-                      },
-                      {
-                          "name": "Links",
-                          "value": (
-                              f"[Commit `{sha[:7]}`]({commit_url}) · "
-                              f"[Änderungen ansehen]({files_url}) · "
-                              f"[Vergleich mit vorherigem Commit]({repo_url}/compare/${{ github.event.before }}...{sha})"
-                          ),
-                          "inline": False
-                      }
-                  ]
-              }]
+              "embeds": [embed],
           }
 
           request = urllib.request.Request(
@@ -74,16 +81,16 @@ jobs:
               data=json.dumps(payload).encode("utf-8"),
               headers={
                   "Content-Type": "application/json",
-                  "User-Agent": "ToHubLab-Cogs/1.0 (+https://github.com/ToHubLab/ToHubLab-Cogs)"
+                  "User-Agent": "ToHubLab-Cogs/1.0 (+https://github.com/ToHubLab/ToHubLab-Cogs)",
               },
-              method="POST"
+              method="POST",
           )
 
           try:
               with urllib.request.urlopen(request) as response:
                   print("Discord HTTP", response.status)
           except urllib.error.HTTPError as e:
-              print("Discord Fehler:", e.code, e.reason)
+              print("Discord error:", e.code, e.reason)
               print(e.read().decode("utf-8", errors="replace"))
               raise
           PY
