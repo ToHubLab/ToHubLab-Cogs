@@ -1,4 +1,3 @@
-```yaml
 name: Sticky Discord Notification
 
 on:
@@ -22,30 +21,34 @@ jobs:
             const before = context.payload.before;
             const after = context.payload.after;
 
-            const response = await github.rest.repos.compareCommits({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              base: before,
-              head: after
-            });
+            let stickyFiles = [];
 
-            const files = response.data.files || [];
+            try {
+              const response = await github.rest.repos.compareCommits({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                base: before,
+                head: after
+              });
 
-            const stickyFiles = files.filter(file =>
-              file.filename.startsWith("sticky/")
-            );
+              const files = response.data.files || [];
+              stickyFiles = files.filter(file =>
+                file.filename.startsWith("sticky/")
+              );
+
+              console.log("Geänderte Dateien:");
+              for (const file of files) {
+                console.log(file.filename);
+              }
+              console.log("Sticky Änderungen:", stickyFiles.length);
+            } catch (error) {
+              console.error("Fehler beim Vergleichen der Commits:", error);
+            }
 
             core.setOutput(
               "has_sticky_changes",
               stickyFiles.length > 0 ? "true" : "false"
             );
-
-            console.log("Geänderte Dateien:");
-            for (const file of files) {
-              console.log(file.filename);
-            }
-
-            console.log("Sticky Änderungen:", stickyFiles.length);
 
       - name: Send latest Sticky commit to Discord
         if: steps.changes.outputs.has_sticky_changes == 'true'
@@ -96,5 +99,3 @@ jobs:
                       f"Discord returned HTTP {response.status}"
                   )
           PY
-```
- 
