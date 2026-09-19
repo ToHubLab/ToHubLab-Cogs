@@ -1,4 +1,4 @@
-[![Red-DiscordBot](https://img.shields.io/badge/Red--DiscordBot-%23cd0000?style=flat)](https://github.com/Cog-Creators/Red-DiscordBot) [![Finn_Bot](https://img.shields.io/badge/Finn__Bot-%231874cd?style=flat)](https://finn-bot.rf.gd/)
+[![Red-DiscordBot](https://img.shields.io/badge/Red--DiscordBot-%23cd0000?style=flat)](https://github.com/Cog-Creators/Red-DiscordBot) [![Finn_Bot](https://img.shields.io/badge/Finn__Bot-%231874cd?style=flat)](https://discord.gg/xZgWjC2HH)
 
 # ToHubLab-Cogs
 
@@ -49,5 +49,5 @@ A powerful cog that keeps a message pinned at the bottom of a Discord channel. W
 ## Support
 
 - **Bug reports & feature requests:** Please open an issue in the repository.
-- **Quick help & general support:**  [![Discord Support](https://img.shields.io/discord/1549415908143792149?logo=discord&label=Discord%20Support)](http://discord.finn-bot.rf.gd)
+- **Quick help & general support:**  [![Discord Support](https://img.shields.io/discord/1549415908143792149?logo=discord&label=Discord%20Support)](https://discord.gg/xZgWjC2HH)
 
