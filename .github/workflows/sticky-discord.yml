@@ -13,42 +13,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Check changed files
         id: changes
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const before = context.payload.before;
-            const after = context.payload.after;
+        run: |
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            # Neuer Branch: Alle Dateien im Push als geändert betrachten
+            CHANGED_FILES=$(git diff --name-only "${{ github.event.after }}^" "${{ github.event.after }}" 2>/dev/null || echo "")
+          else
+            CHANGED_FILES=$(git diff --name-only "${{ github.event.before }}" "${{ github.event.after }}")
+          fi
 
-            let stickyFiles = [];
+          echo "Geänderte Dateien:"
+          echo "$CHANGED_FILES"
 
-            try {
-              const response = await github.rest.repos.compareCommits({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                base: before,
-                head: after
-              });
-
-              const files = response.data.files || [];
-              stickyFiles = files.filter(file =>
-                file.filename.startsWith("sticky/")
-              );
-
-              console.log("Geänderte Dateien:");
-              for (const file of files) {
-                console.log(file.filename);
-              }
-              console.log("Sticky Änderungen:", stickyFiles.length);
-            } catch (error) {
-              console.error("Fehler beim Vergleichen der Commits:", error);
-            }
-
-            core.setOutput(
-              "has_sticky_changes",
-              stickyFiles.length > 0 ? "true" : "false"
-            );
+          if echo "$CHANGED_FILES" | grep -q "^sticky/"; then
+            echo "has_sticky_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_sticky_changes=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Send latest Sticky commit to Discord
         if: steps.changes.outputs.has_sticky_changes == 'true'
