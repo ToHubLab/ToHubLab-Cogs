@@ -46,12 +46,17 @@ jobs:
           branch_url = f"{repo_url}/tree/{branch}"
           author_url = f"https://github.com/{author_username}" if author_username else repo_url
 
-          links = [
-              f"[`{short_sha}`]({commit_url})",
-              f"[View changes]({files_url})",
+          fields = [
+              {"name": "Branch", "value": branch, "inline": True},
+              {"name": "Commit", "value": short_sha, "inline": True},
           ]
+
           if before and set(before) != {"0"}:
-              links.append(f"[Full diff]({repo_url}/compare/{before}...{sha})")
+              fields.append({
+                  "name": "Diff",
+                  "value": f"[Compare changes]({repo_url}/compare/{before}...{sha})",
+                  "inline": True,
+              })
 
           embed = {
               "title": "New Sticky Update",
@@ -59,11 +64,7 @@ jobs:
               "description": os.environ["COMMIT_MESSAGE"][:4000],
               "color": 0x5865F2,
               "author": {"name": author, "url": author_url},
-              "fields": [
-                  {"name": "Branch", "value": f"[`{branch}`]({branch_url})", "inline": True},
-                  {"name": "Commit", "value": f"[`{short_sha}`]({commit_url})", "inline": True},
-                  {"name": "Links", "value": " · ".join(links), "inline": False},
-              ],
+              "fields": fields,
               "footer": {"text": repo},
               "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
           }
