@@ -1,4 +1,4 @@
-[![Red-DiscordBot](https://img.shields.io/badge/Red--DiscordBot-%23cd0000?style=flat)](https://github.com/Cog-Creators/Red-DiscordBot) [![Finn_Bot](https://img.shields.io/badge/Finn__Bot-%231874cd?style=flat)](https://discord.gg/xZgWjC2HH)
+[![Red-DiscordBot](https://img.shields.io/badge/Red--DiscordBot-%23cd0000?style=flat)](https://github.com/Cog-Creators/Red-DiscordBot) [![Finn_Bot](https://img.shields.io/badge/Finn__Bot-%231874cd?style=flat)](https://finn-bot.rf.gd) 
 
 # ToHubLab-Cogs
 
