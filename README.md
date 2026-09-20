@@ -2,7 +2,7 @@
 
 # ToHubLab-Cogs
 
-A Red-DiscordBot cog that keeps a message pinned to the bottom of a channel — with text, embeds, components, and clickable command buttons.
+This repository is where my Red-DiscordBot cogs are published, maintained, and kept up to date. Explore the available cogs and their latest versions here.
 <details>
 <summary>📌 sticky</summary>
 
