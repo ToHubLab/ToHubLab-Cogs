@@ -53,6 +53,8 @@ A powerful cog that keeps a message pinned at the bottom of a Discord channel. W
 
 A Red-DiscordBot cog that verifies new members via a button or reaction, challenges them with a math or text task, and grants a role — with a full setup wizard, custom emoji support, security checks, and a live management menu.
 
+---
+
 ## ✨ Features
 
 | Feature | Description |
@@ -75,6 +77,8 @@ A Red-DiscordBot cog that verifies new members via a button or reaction, challen
 | 🔒 **Admin Only** | Configuration commands require `Manage Server` |
 | 🐙 **Credits** | Built-in link to [ToHubLab on GitHub](https://github.com/ToHubLab) |
 
+---
+
 ## 📦 Installation
 
 ```text
@@ -86,7 +90,7 @@ A Red-DiscordBot cog that verifies new members via a button or reaction, challen
 ```
 
 ```text
-[p]verifysetup start
+[p]load verification
 ```
 </details>
 </details>
