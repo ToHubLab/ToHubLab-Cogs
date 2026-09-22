@@ -1,0 +1,13 @@
+{
+    "author": ["ToHubLab"],
+    "name": "C",
+    "short": "Cleanup commands with statistics, debug mode and DE/EN toggle.",
+    "description": "A simple, multilingual cleaner cog for Red-DiscordBot. Counts deleted messages per server, provides cleanup commands (single amount or all), a reset command, statistics, a debug mode that forwards logs to a channel with a 2-second delay, copyright info and a localized help overview. Language can be switched per server with the built-in clang command.",
+    "end_user_data_statement": "This cog only stores guild-related settings (deleted-message counter, language, debug channel). No user data is stored.",
+    "requirements": [],
+    "tags": ["utility", "cleanup", "moderation", "i18n", "statistics", "debug"],
+    "min_bot_version": "3.5.0",
+    "hidden": false,
+    "disabled": false,
+    "type": "COG"
+}
