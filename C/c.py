@@ -68,7 +68,7 @@ TRANSLATIONS = {
         "cmd_cinfo": "Show information and current deleted-message count.",
         "cmd_cstats": "Show statistics for this server.",
         "cmd_cping": "Simple ping check.",
-        "cmd_cclean": "Delete the given amount of messages, or all messages in this channel.",
+        "cmd_cclean": "Delete the given amount of messages, or all messages in this channel. Add `force` to skip confirmation.",
         "cmd_creset": "Reset the deleted-message counter for this server.",
         "cmd_cdebug": "Enable/disable debug mode and set the log channel.",
         "cmd_cc": "Show copyright and information about this cog.",
@@ -124,7 +124,7 @@ TRANSLATIONS = {
         "cmd_cinfo": "Zeigt Informationen und die aktuelle Anzahl gelöschter Nachrichten.",
         "cmd_cstats": "Zeigt Statistiken für diesen Server.",
         "cmd_cping": "Simpler Ping-Test.",
-        "cmd_cclean": "Löscht die angegebene Anzahl an Nachrichten oder alle in diesem Channel.",
+        "cmd_cclean": "Löscht die angegebene Anzahl an Nachrichten oder alle in diesem Channel. Mit `force` wird die Bestätigung übersprungen.",
         "cmd_creset": "Setzt den Zähler gelöschter Nachrichten für diesen Server zurück.",
         "cmd_cdebug": "Aktiviert/deaktiviert den Debug-Modus und setzt den Log-Channel.",
         "cmd_cc": "Zeigt Copyright und Informationen über diesen Cog.",
@@ -395,15 +395,36 @@ class C(red_commands.Cog):
     # ============================================================
     @red_commands.command(name="cclean", aliases=["c_clean"])
     @red_commands.guild_only()
-    @red_commands.admin_or_permissions(manage_messages=True)
     @red_commands.bot_has_permissions(manage_messages=True, read_message_history=True)
-    async def cclean(self, ctx: commands.Context, amount: str):
-        """Delete messages. Usage: `cclean <number>` or `cclean all`."""
+    async def cclean(self, ctx: commands.Context, *, args: str = ""):
+        """Delete messages. Usage: `cclean <number>` or `cclean all [force]`."""
+
+        parts = args.strip().lower().split()
+        if not parts:
+            await ctx.send(await self._t(ctx.guild, "invalid_number"))
+            return
+
+        target = parts[0]
+        force_flag = any(p in ("force", "f", "-f", "--force", "yes", "true") for p in parts[1:])
+
+        # ---- Permission-Check (nur bei menschlichen Aufrufern) ----
+        if not ctx.author.bot:
+            has_perm = (
+                ctx.author.guild_permissions.manage_messages
+                or ctx.author.guild_permissions.administrator
+                or await self.bot.is_owner(ctx.author)
+            )
+            if not has_perm:
+                await ctx.send(await self._t(ctx.guild, "no_perm_delete"))
+                return
 
         # ---------- ALL ----------
-        if amount.lower() in ("all", "alles", "everything"):
-            if not await self._confirm(ctx):
-                return
+        if target in ("all", "alles", "everything"):
+            # Bestätigung nur bei Menschen ohne force
+            if not force_flag and not ctx.author.bot:
+                if not await self._confirm(ctx):
+                    return
+
             try:
                 deleted = await ctx.channel.purge(limit=None)
             except discord.Forbidden:
@@ -432,7 +453,7 @@ class C(red_commands.Cog):
 
         # ---------- Zahl ----------
         try:
-            num = int(amount)
+            num = int(target)
             if num <= 0:
                 raise ValueError
         except ValueError:
@@ -506,7 +527,7 @@ class C(red_commands.Cog):
         embed.add_field(name=f"`{p}cstats`", value=await self._t(g, "cmd_cstats"), inline=False)
         embed.add_field(name=f"`{p}cping`", value=await self._t(g, "cmd_cping"), inline=False)
         embed.add_field(
-            name=f"`{p}cclean <number|all>`",
+            name=f"`{p}cclean <number|all> [force]`",
             value=await self._t(g, "cmd_cclean"),
             inline=False,
         )
