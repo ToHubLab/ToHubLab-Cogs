@@ -1,4 +1,4 @@
-name: cclean Discord Notification
+name: C Discord Notification
 
 on:
   push:
@@ -6,16 +6,16 @@ on:
       - main
       - master
     paths:
-      - "cclean/**"
+      - "C/**"
 
 jobs:
   discord:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send latest cclean commit to Discord
+      - name: Send latest C commit to Discord
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_cclean }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_C }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           COMMIT_URL: ${{ github.event.head_commit.html_url }}
           COMMIT_SHA: ${{ github.event.head_commit.id }}
@@ -54,7 +54,7 @@ jobs:
               })
 
           embed = {
-              "title": "New cclean Update",
+              "title": "New C Update",
               "url": commit_url,
               "description": os.environ["COMMIT_MESSAGE"][:4000],
               "color": 0x5865F2,
@@ -68,7 +68,7 @@ jobs:
               embed["author"]["icon_url"] = f"https://github.com/{author_username}.png"
 
           payload = {
-              "username": "GitHub cclean",
+              "username": "GitHub C",
               "embeds": [embed],
           }
 
