@@ -110,6 +110,8 @@ A lightweight cog that counts deleted messages, provides clean-up commands, forw
 |---|---|
 | 🗑️ **Delete Counter** | Counts every deleted message per server — including manual deletions and bulk purges |
 | 🧹 **Clean-up Commands** | Delete a specific amount of messages or wipe an entire channel with `cclean` |
+| ⚡ **Force Flag** | Skip the confirmation prompt with `cclean all force` — ideal for automation |
+| 🤖 **Bot & Webhook Friendly** | `cclean` works when triggered by other bots or webhooks, bypassing permission and confirmation prompts automatically |
 | ↩️ **Counter Reset** | Reset the deleted-message counter for the current server with `creset` |
 | 📊 **Statistics** | View server stats, counter, and debug status via `cstats` |
 | 🐛 **Debug Mode** | Forward all cog events to a dedicated log channel with a 2-second delay |
