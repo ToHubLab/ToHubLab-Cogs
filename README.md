@@ -139,6 +139,8 @@ A lightweight cog that counts deleted messages, provides clean-up commands, forw
 ```text
 [p]cb
 ```
+</details>
+</details>
 
 ## Support
 
