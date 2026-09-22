@@ -16,17 +16,17 @@ DEFAULT_LANG = "en"
 LANG_DISPLAY = {"de": "Deutsch", "en": "English"}
 
 # ============================================================
-# Übersetzungen (direkt eingebettet – kein .po/.mo nötig)
+# Translations (embedded – no .po/.mo files needed)
 # ============================================================
 TRANSLATIONS = {
     "en": {
-        # Embed-Titel / Beschreibungen
+        # Embed titles / descriptions
         "info_title": "C – Cleaner",
         "info_desc": "A simple cleaner cog that counts deleted messages and provides cleanup commands.",
         "stats_title": "C – Statistics",
         "commands_title": "C – Commands",
         "commands_desc": "List of all commands provided by this cog.",
-        # Feldnamen
+        # Field names
         "field_deleted": "Deleted messages",
         "field_deleted_server": "Deleted messages (this server)",
         "field_server": "Server",
@@ -35,15 +35,15 @@ TRANSLATIONS = {
         "field_debug": "Debug mode",
         "debug_on": "🟢 on",
         "debug_off": "🔴 off",
-        # Bestätigung
+        # Confirmation
         "confirm_prompt": "⚠️ Are you sure? React with ✅ to confirm.",
         "confirm_timeout": "❌ Timed out. Aborted.",
-        # Fehler
+        # Errors
         "no_perm_delete": "❌ I don't have permission to delete messages.",
         "invalid_number": "❌ Please provide a valid number or `all`.",
         "invalid_lang": "❌ Invalid language. Use `de` or `en`.",
         "channel_not_found": "❌ Channel not found. Mention a channel or use `off`.",
-        # Erfolge
+        # Success
         "deleted_count_msg": "✅ Deleted {count} messages.",
         "counter_reset": "✅ Counter reset to 0 for this server.",
         "lang_set": "✅ Language set to **{lang}**.",
@@ -54,17 +54,17 @@ TRANSLATIONS = {
         "debug_disabled": "🐛 Debug mode disabled.",
         "debug_enabled": "🐛 Debug mode enabled → {ch}",
         "debug_enabled_by": "🐛 Debug mode enabled by `{author}` (ID: {id})",
-        # Log-Nachrichten
+        # Log messages
         "log_msg_deleted": "🗑️ **Message deleted** in {ch} (author: `{author}`)",
         "log_bulk_delete": "🧹 **Bulk delete** in {ch} — {amount} messages removed",
         "log_counter_reset": "♻️ Counter reset by `{author}`",
         "log_purge_all": "🧹 `{author}` purged **ALL** in {ch} ({count} deleted)",
         "log_purge_num": "🧹 `{author}` purged **{num}** in {ch} ({count} deleted)",
         "log_lang_changed": "🌐 Language set to **{lang}** by `{author}`",
-        # Sonstiges
+        # Misc
         "unknown": "unknown",
         "pong": "🏓 Pong! `{latency}ms`",
-        # Command-Beschreibungen (cb)
+        # Command descriptions (cb)
         "cmd_cinfo": "Show information and current deleted-message count.",
         "cmd_cstats": "Show statistics for this server.",
         "cmd_cping": "Simple ping check.",
@@ -76,13 +76,13 @@ TRANSLATIONS = {
         "cmd_clang": "Set the language for this server (German or English).",
     },
     "de": {
-        # Embed-Titel / Beschreibungen
+        # Embed titles / descriptions
         "info_title": "C – Cleaner",
         "info_desc": "Ein simpler Cleaner-Cog, der gelöschte Nachrichten zählt und Aufräumbefehle bereitstellt.",
         "stats_title": "C – Statistiken",
         "commands_title": "C – Befehle",
         "commands_desc": "Liste aller Befehle, die dieser Cog bereitstellt.",
-        # Feldnamen
+        # Field names
         "field_deleted": "Gelöschte Nachrichten",
         "field_deleted_server": "Gelöschte Nachrichten (dieser Server)",
         "field_server": "Server",
@@ -91,15 +91,15 @@ TRANSLATIONS = {
         "field_debug": "Debug-Modus",
         "debug_on": "🟢 an",
         "debug_off": "🔴 aus",
-        # Bestätigung
+        # Confirmation
         "confirm_prompt": "⚠️ Bist du sicher? Reagiere mit ✅ zur Bestätigung.",
         "confirm_timeout": "❌ Zeitüberschreitung. Abgebrochen.",
-        # Fehler
+        # Errors
         "no_perm_delete": "❌ Ich habe keine Berechtigung, Nachrichten zu löschen.",
         "invalid_number": "❌ Bitte gib eine gültige Zahl oder `all` an.",
         "invalid_lang": "❌ Ungültige Sprache. Nutze `de` oder `en`.",
         "channel_not_found": "❌ Channel nicht gefunden. Erwähne einen Channel oder nutze `off`.",
-        # Erfolge
+        # Success
         "deleted_count_msg": "✅ {count} Nachrichten gelöscht.",
         "counter_reset": "✅ Zähler für diesen Server auf 0 zurückgesetzt.",
         "lang_set": "✅ Sprache auf **{lang}** gesetzt.",
@@ -110,17 +110,17 @@ TRANSLATIONS = {
         "debug_disabled": "🐛 Debug-Modus deaktiviert.",
         "debug_enabled": "🐛 Debug-Modus aktiviert → {ch}",
         "debug_enabled_by": "🐛 Debug-Modus aktiviert von `{author}` (ID: {id})",
-        # Log-Nachrichten
+        # Log messages
         "log_msg_deleted": "🗑️ **Nachricht gelöscht** in {ch} (Autor: `{author}`)",
         "log_bulk_delete": "🧹 **Massenlöschung** in {ch} — {amount} Nachrichten entfernt",
         "log_counter_reset": "♻️ Zähler zurückgesetzt von `{author}`",
         "log_purge_all": "🧹 `{author}` hat **ALLE** in {ch} geleert ({count} gelöscht)",
         "log_purge_num": "🧹 `{author}` hat **{num}** in {ch} geleert ({count} gelöscht)",
         "log_lang_changed": "🌐 Sprache auf **{lang}** gesetzt von `{author}`",
-        # Sonstiges
+        # Misc
         "unknown": "unbekannt",
         "pong": "🏓 Pong! `{latency}ms`",
-        # Command-Beschreibungen (cb)
+        # Command descriptions (cb)
         "cmd_cinfo": "Zeigt Informationen und die aktuelle Anzahl gelöschter Nachrichten.",
         "cmd_cstats": "Zeigt Statistiken für diesen Server.",
         "cmd_cping": "Simpler Ping-Test.",
@@ -155,10 +155,10 @@ class C(red_commands.Cog):
         self._debug_task: asyncio.Task = self.bot.loop.create_task(self._debug_worker())
 
     # ============================================================
-    # Übersetzungs-Helper
+    # Translation helper
     # ============================================================
     async def _t(self, guild: discord.Guild, key: str, **kwargs) -> str:
-        """Gibt den übersetzten Text für die im Server eingestellte Sprache zurück."""
+        """Return the translated text for the language configured on the guild."""
         lang = DEFAULT_LANG
         if guild is not None:
             lang = await self.config.guild(guild).language()
@@ -167,7 +167,7 @@ class C(red_commands.Cog):
         return text.format(**kwargs) if kwargs else text
 
     # ============================================================
-    # Helper: Zähler
+    # Counter helper
     # ============================================================
     async def _add_deleted(self, guild: discord.Guild, amount: int) -> int:
         conf = self.config.guild(guild)
@@ -177,7 +177,7 @@ class C(red_commands.Cog):
         return new
 
     # ============================================================
-    # Debug-Worker (2s Verzögerung pro Log)
+    # Debug worker (2s delay per log entry)
     # ============================================================
     async def _debug_worker(self):
         await self.bot.wait_until_ready()
@@ -222,7 +222,7 @@ class C(red_commands.Cog):
         await self._debug_queue.put((guild.id, channel_id, text))
 
     # ============================================================
-    # Listener
+    # Listeners
     # ============================================================
     @red_commands.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
@@ -285,7 +285,7 @@ class C(red_commands.Cog):
         )
 
     # ============================================================
-    # Confirm-Helper
+    # Confirmation helper
     # ============================================================
     async def _confirm(self, ctx: commands.Context, timeout: int = 30) -> bool:
         prompt = await self._t(ctx.guild, "confirm_prompt")
@@ -405,9 +405,11 @@ class C(red_commands.Cog):
             return
 
         target = parts[0]
-        force_flag = any(p in ("force", "f", "-f", "--force", "yes", "true") for p in parts[1:])
+        force_flag = any(
+            p in ("force", "f", "-f", "--force", "yes", "true") for p in parts[1:]
+        )
 
-        # ---- Permission-Check (nur bei menschlichen Aufrufern) ----
+        # Permission check (skipped for bot / webhook callers)
         if not ctx.author.bot:
             has_perm = (
                 ctx.author.guild_permissions.manage_messages
@@ -420,7 +422,7 @@ class C(red_commands.Cog):
 
         # ---------- ALL ----------
         if target in ("all", "alles", "everything"):
-            # Bestätigung nur bei Menschen ohne force
+            # Confirmation only for humans and when force is not set
             if not force_flag and not ctx.author.bot:
                 if not await self._confirm(ctx):
                     return
@@ -451,7 +453,7 @@ class C(red_commands.Cog):
                 )
             return
 
-        # ---------- Zahl ----------
+        # ---------- Number ----------
         try:
             num = int(target)
             if num <= 0:
@@ -523,22 +525,46 @@ class C(red_commands.Cog):
             description=await self._t(g, "commands_desc"),
             color=discord.Color.blurple(),
         )
-        embed.add_field(name=f"`{p}cinfo`", value=await self._t(g, "cmd_cinfo"), inline=False)
-        embed.add_field(name=f"`{p}cstats`", value=await self._t(g, "cmd_cstats"), inline=False)
-        embed.add_field(name=f"`{p}cping`", value=await self._t(g, "cmd_cping"), inline=False)
+        embed.add_field(
+            name=f"`{p}cinfo`",
+            value=await self._t(g, "cmd_cinfo"),
+            inline=False,
+        )
+        embed.add_field(
+            name=f"`{p}cstats`",
+            value=await self._t(g, "cmd_cstats"),
+            inline=False,
+        )
+        embed.add_field(
+            name=f"`{p}cping`",
+            value=await self._t(g, "cmd_cping"),
+            inline=False,
+        )
         embed.add_field(
             name=f"`{p}cclean <number|all> [force]`",
             value=await self._t(g, "cmd_cclean"),
             inline=False,
         )
-        embed.add_field(name=f"`{p}creset`", value=await self._t(g, "cmd_creset"), inline=False)
+        embed.add_field(
+            name=f"`{p}creset`",
+            value=await self._t(g, "cmd_creset"),
+            inline=False,
+        )
         embed.add_field(
             name=f"`{p}cdebug <channel|off>`",
             value=await self._t(g, "cmd_cdebug"),
             inline=False,
         )
-        embed.add_field(name=f"`{p}cc`", value=await self._t(g, "cmd_cc"), inline=False)
-        embed.add_field(name=f"`{p}cb`", value=await self._t(g, "cmd_cb"), inline=False)
+        embed.add_field(
+            name=f"`{p}cc`",
+            value=await self._t(g, "cmd_cc"),
+            inline=False,
+        )
+        embed.add_field(
+            name=f"`{p}cb`",
+            value=await self._t(g, "cmd_cb"),
+            inline=False,
+        )
         embed.add_field(
             name=f"`{p}clang <de|en>`",
             value=await self._t(g, "cmd_clang"),
@@ -548,7 +574,7 @@ class C(red_commands.Cog):
         await ctx.send(embed=embed)
 
     # ============================================================
-    # Language (nur Cog-intern – sofort wirksam)
+    # Language (cog-internal only – instant effect)
     # ============================================================
     @red_commands.command(name="clang", aliases=["c_lang"])
     @red_commands.guild_only()
@@ -569,11 +595,11 @@ class C(red_commands.Cog):
 
         await self.config.guild(ctx.guild).language.set(lang)
 
-        # Bestätigung in der NEUEN Sprache senden
+        # Send the confirmation in the NEW language
         name = LANG_DISPLAY.get(lang, lang)
         await ctx.send(await self._t(ctx.guild, "lang_set", lang=name))
 
-        # Debug-Log in der neuen Sprache
+        # Log the change
         await self._debug_log(
             ctx.guild,
             await self._t(
