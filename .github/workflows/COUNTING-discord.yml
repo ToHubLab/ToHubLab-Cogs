@@ -1,0 +1,92 @@
+name: DISCORD_WEBHOOK_COUNTING Discord Notification
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "DISCORD_WEBHOOK_COUNTING/**"
+
+jobs:
+  discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send latest DISCORD_WEBHOOK_COUNTING commit to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DISCORD_WEBHOOK_COUNTING }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.html_url }}
+          COMMIT_SHA: ${{ github.event.head_commit.id }}
+          AUTHOR: ${{ github.event.head_commit.author.name }}
+          AUTHOR_USERNAME: ${{ github.event.head_commit.author.username }}
+          REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+          import urllib.error
+          import datetime
+
+          sha = os.environ["COMMIT_SHA"]
+          short_sha = sha[:7]
+          repo = os.environ["REPO"]
+          commit_url = os.environ["COMMIT_URL"]
+          author = os.environ["AUTHOR"] or "Unknown"
+          author_username = os.environ.get("AUTHOR_USERNAME", "").strip()
+          before = os.environ.get("BEFORE", "").strip()
+
+          repo_url = f"https://github.com/{repo}"
+          author_url = f"https://github.com/{author_username}" if author_username else repo_url
+
+          fields = [
+              {"name": "Commit", "value": short_sha, "inline": True},
+          ]
+
+          if before and set(before) != {"0"}:
+              fields.append({
+                  "name": "Diff",
+                  "value": f"[Compare changes]({repo_url}/compare/{before}...{sha})",
+                  "inline": True,
+              })
+
+          embed = {
+              "title": "New DISCORD_WEBHOOK_COUNTING Update",
+              "url": commit_url,
+              "description": os.environ["COMMIT_MESSAGE"][:4000],
+              "color": 0x5865F2,
+              "author": {"name": author, "url": author_url},
+              "fields": fields,
+              "footer": {"text": repo},
+              "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+          }
+
+          if author_username:
+              embed["author"]["icon_url"] = f"https://github.com/{author_username}.png"
+
+          payload = {
+              "username": "GitHub DISCORD_WEBHOOK_COUNTING",
+              "embeds": [embed],
+          }
+
+          request = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK"],
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "ToHubLab-Cogs/1.0 (+https://github.com/ToHubLab/ToHubLab-Cogs)",
+              },
+              method="POST",
+          )
+
+          try:
+              with urllib.request.urlopen(request) as response:
+                  print("Discord HTTP", response.status)
+          except urllib.error.HTTPError as e:
+              print("Discord error:", e.code, e.reason)
+              print(e.read().decode("utf-8", errors="replace"))
+              raise
+          PY
