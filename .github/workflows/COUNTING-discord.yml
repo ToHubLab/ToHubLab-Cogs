@@ -6,7 +6,7 @@ on:
       - main
       - master
     paths:
-      - "COUNTING/**"
+      - "tohubLabcounting/**"
 
 jobs:
   discord:
