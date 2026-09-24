@@ -1,4 +1,4 @@
-from .core import ToHubLabCounting
+from .core import Counting
 
 async def setup(bot):
-    await bot.add_cog(ToHubLabCounting(bot))
+    await bot.add_cog(Counting(bot))
