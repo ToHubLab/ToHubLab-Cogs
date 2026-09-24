@@ -26,8 +26,8 @@ A server-wide counting game for Red-DiscordBot — with a saves system, leaderbo
 [p]repo add ToHubLab-Cogs https://github.com/ToHubLab/ToHubLab-Cogs
 ```
 ```text
-[p]cog install ToHubLab-Cogs tohubLabcounting
+[p]cog install ToHubLab-Cogs counting
 ```
 ```text
-[p]load tohubLabcounting
+[p]load counting
 ```
