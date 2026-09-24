@@ -54,7 +54,7 @@ jobs:
               })
 
           embed = {
-              "title": "New counting Update",
+              "title": "New Counting Update",
               "url": commit_url,
               "description": os.environ["COMMIT_MESSAGE"][:4000],
               "color": 0x5865F2,
