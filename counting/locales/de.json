@@ -2,7 +2,7 @@
     "language_code": "de",
     "language_name": "Deutsch",
     "translations": {
-        "menu_title": "🔢 ToHubLab Zählspiel — Einrichtungsmenü",
+        "menu_title": "🔢 Zählspiel — Einrichtungsmenü",
         "menu_desc": "Konfiguriere das Zählspiel für diesen Server.",
         "menu_channel": "📺 Zähl-Kanal",
         "menu_saves": "💾 Saves",
