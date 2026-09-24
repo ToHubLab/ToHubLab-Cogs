@@ -1,6 +1,6 @@
 {
     "author": ["ToHubLab"],
-    "name": "ToHubLabCounting",
+    "name": "Counting",
     "short": "ToHubLab Counting Game",
     "description": "A server-wide counting game with a saves system, leaderboard, achievements and shop integration. Uses Red's bank system for purchases.",
     "end_user_data_statement": "This cog stores the current count, remaining saves, the last counter, per-user counts, mistakes, achievements and the leaderboard for each server.",
