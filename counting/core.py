@@ -10,13 +10,13 @@ import discord
 from discord.ext import tasks
 from redbot.core import commands, Config, bank, checks
 
-log = logging.getLogger("red.tohubLabcounting")
+log = logging.getLogger("red.counting")
 
 LOCALES_DIR = Path(__file__).parent / "locales"
 MAIN_LANGUAGE = "en"
 
 
-class ToHubLabCounting(commands.Cog):
+class Counting(commands.Cog):
     """ToHubLab Counting Game — a server-wide counting game with saves system."""
 
     def __init__(self, bot):
