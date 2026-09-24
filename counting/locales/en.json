@@ -2,7 +2,7 @@
     "language_code": "en",
     "language_name": "English",
     "translations": {
-        "menu_title": "🔢 ToHubLab Counting — Setup Menu",
+        "menu_title": "🔢 Counting — Setup Menu",
         "menu_desc": "Configure the counting game for this server.",
         "menu_channel": "📺 Counting Channel",
         "menu_saves": "💾 Saves",
