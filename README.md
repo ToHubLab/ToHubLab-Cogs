@@ -179,10 +179,10 @@ A lightweight cog that counts deleted messages, provides clean-up commands, forw
 [p]repo add ToHubLab-Cogs https://github.com/ToHubLab/ToHubLab-Cogs
 ```
 ```text
-[p]cog install ToHubLab-Cogs tohubLabcounting
+[p]cog install ToHubLab-Cogs counting
 ```
 ```text
-[p]load tohubLabcounting
+[p]load counting
 ```
 </details>
 </details>
