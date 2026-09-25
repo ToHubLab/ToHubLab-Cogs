@@ -147,9 +147,9 @@ A lightweight cog that counts deleted messages, provides clean-up commands, forw
 <details>
 <summary>📌 counting</summary>
 
-# C Cog for Red-DiscordBot
+# Counting Cog for Red-DiscordBot
 
-A lightweight cog that counts deleted messages, provides clean-up commands, forwards events to a debug log channel, and supports live bilingual switching (German / English) — per server, without a bot restart.
+A server-wide counting game for Red-DiscordBot — with a saves system, leaderboard, achievements, and a bilingual interactive setup menu.
 
 ---
 
