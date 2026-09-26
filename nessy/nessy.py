@@ -1,20 +1,3 @@
-"""
-Nessy Cog (Red-DiscordBot)
---------------------------
-Randomly posts a Nessy emoji in a random channel. The first user to click
-the button wins credits and (after N catches) a reward role.
-
-Features:
-- Random spawns (2-5 min after load, then 15 min - 3 h)
-- Streak system: consecutive catches multiply credits up to a configurable
-  cap, beyond that a small flat bonus is added
-- Daily first catch: 2x bonus for the first catch of each UTC day
-- Boss Nessy: rare spawn where 3 different users must press 3 weapons in time
-- Credits randomly picked between a configurable min and max
-- Boss credits randomly picked between a configurable min and max
-- Announcements auto-delete after a configurable delay
-"""
-
 from __future__ import annotations
 
 import asyncio
