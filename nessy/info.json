@@ -1,0 +1,7 @@
+{
+    "author": ["ToHubLab"],
+    "name": "Nessy",
+    "short": "Random Nessy spawns with first-clicker rewards",
+    "description": "Posts a Nessy emoji in a random channel. The first user to click wins a configurable role and credits.",
+    "end_user_data_statement": "This cog stores per-guild configuration and the Discord user IDs of users who caught Nessy in order to grant rewards. No message content is stored."
+}
