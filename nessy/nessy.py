@@ -1,3 +1,20 @@
+"""
+Nessy Cog (Red-DiscordBot)
+--------------------------
+Randomly posts a Nessy emoji in a random channel. The first user to click
+the button wins credits and (after N catches) a reward role.
+
+Features:
+- Random spawns (2-5 min after load, then 15 min - 3 h)
+- Streak system: consecutive catches multiply credits up to a configurable
+  cap, beyond that a small flat bonus is added
+- Daily first catch: 2x bonus for the first catch of each UTC day
+- Boss Nessy: rare spawn where 3 different users must press 3 weapons in time
+- Credits randomly picked between a configurable min and max
+- Boss credits randomly picked between a configurable min and max
+- Announcements auto-delete after a configurable delay
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -109,10 +126,17 @@ class NessyView(discord.ui.View):
         self.guild_id = guild_id
         self.claimed = False
 
+        emoji_obj = None
+        if emoji:
+            try:
+                emoji_obj = discord.PartialEmoji.from_str(emoji)
+            except Exception:
+                emoji_obj = emoji
+
         button = discord.ui.Button(
             label="Catch Nessy!",
             style=discord.ButtonStyle.success,
-            emoji=emoji,
+            emoji=emoji_obj,
         )
         button.callback = self._on_claim
         self.add_item(button)
@@ -159,12 +183,10 @@ class NessyView(discord.ui.View):
         member = interaction.user  # type: ignore[assignment]
         guild = interaction.guild  # type: ignore[assignment]
 
-        # ----- Catches -----
         catches = await member_conf.catches()
         catches += 1
         await member_conf.catches.set(catches)
 
-        # ----- Streak -----
         last_catcher_id = await guild_conf.last_catcher_id()
         if last_catcher_id == member.id:
             streak = await member_conf.streak()
@@ -173,9 +195,19 @@ class NessyView(discord.ui.View):
             streak = 1
         await member_conf.streak.set(streak)
         await guild_conf.last_catcher_id.set(member.id)
-        streak_mult = min(streak, 4)
 
-        # ----- Daily first catch -----
+        streak_cap = int(await guild_conf.streak_cap())
+        bonus_min = int(await guild_conf.streak_bonus_min())
+        bonus_max = int(await guild_conf.streak_bonus_max())
+        if bonus_min > bonus_max:
+            bonus_min, bonus_max = bonus_max, bonus_min
+
+        streak_mult = min(streak, streak_cap) if streak_cap > 0 else streak
+
+        over_cap_bonus = 0
+        if streak_cap > 0 and streak > streak_cap:
+            over_cap_bonus = random.randint(bonus_min, bonus_max)
+
         today = discord.utils.utcnow().date().isoformat()
         last_daily = await guild_conf.daily_first_date()
         is_daily_first = last_daily != today
@@ -183,10 +215,8 @@ class NessyView(discord.ui.View):
             await guild_conf.daily_first_date.set(today)
         daily_mult = 2 if is_daily_first else 1
 
-        # ----- Threshold -----
         threshold = int(await guild_conf.catches_required())
 
-        # ----- Role reward -----
         role_rewarded: Optional[discord.Role] = None
         role_id = await guild_conf.reward_role_id()
         if role_id and catches >= threshold:
@@ -200,14 +230,13 @@ class NessyView(discord.ui.View):
                         "Nessy: could not add role %s to %s", role, member
                     )
 
-        # ----- Credits (base random, then multiplied) -----
         min_c = int(await guild_conf.reward_credits_min())
         max_c = int(await guild_conf.reward_credits_max())
         if min_c > max_c:
             min_c, max_c = max_c, min_c
         base_credits = random.randint(min_c, max_c) if max_c > 0 else 0
         total_mult = streak_mult * daily_mult
-        credits = base_credits * total_mult
+        credits = (base_credits * total_mult) + over_cap_bonus
 
         credits_granted = False
         if credits > 0:
@@ -217,13 +246,19 @@ class NessyView(discord.ui.View):
             except Exception as exc:
                 self.cog.log.warning("Nessy: could not deposit credits: %s", exc)
 
-        # ----- Build announcement -----
         lines = [f"🎉 {member.mention} caught Nessy!"]
         if is_daily_first:
             lines.append("🌟 **First catch of the day!** Bonus ×2")
+
         if streak > 1:
-            fires = "🔥" * min(streak, 6)
-            lines.append(f"{fires} Streak ×{streak_mult}")
+            fire_count = min(streak, streak_cap) if streak_cap > 0 else streak
+            fires = "🔥" * max(1, min(fire_count, 3))
+            if streak_cap > 0 and streak > streak_cap:
+                lines.append(
+                    f"{fires} Streak: **{streak}** (+{over_cap_bonus} extra)"
+                )
+            else:
+                lines.append(f"{fires} Streak: **{streak}** (×{streak_mult})")
 
         if role_rewarded:
             lines.append(f"🏅 Won the **{role_rewarded.name}** role!")
@@ -293,6 +328,9 @@ class ResetConfirmView(discord.ui.View):
             "boss_chance": 1,
             "boss_reward_credits_min": 100,
             "boss_reward_credits_max": 500,
+            "streak_cap": 3,
+            "streak_bonus_min": 5,
+            "streak_bonus_max": 15,
         }
         await conf.set(defaults)
         await interaction.response.edit_message(
@@ -334,8 +372,9 @@ class ResetFirstConfirmView(discord.ui.View):
             title="⚠️ Are you absolutely sure?",
             description=(
                 "This will reset **all Nessy settings** for this server "
-                "(role, credits, boss settings, emoji, lifetime, excluded channels, "
-                "daily bonus, etc.). This cannot be undone.\n\n"
+                "(role, credits, boss settings, streak settings, emoji, "
+                "lifetime, excluded channels, daily bonus, etc.). "
+                "This cannot be undone.\n\n"
                 "Click **Yes, reset everything** to confirm."
             ),
             color=0xED4245,
@@ -420,7 +459,11 @@ class LifetimeModal(discord.ui.Modal, title="Set Nessy Lifetime"):
 
 
 class EmojiModal(discord.ui.Modal, title="Set Nessy Emoji"):
-    emoji = discord.ui.TextInput(label="Emoji", required=True, max_length=64)
+    emoji = discord.ui.TextInput(
+        label="Emoji (use <:name:id> for custom)",
+        placeholder="e.g. 🦕 or <:nessy:123456789012345678>",
+        required=True, max_length=64,
+    )
 
     def __init__(self, cog: "Nessy", guild: discord.Guild, parent: "NessyAdminView"):
         super().__init__()
@@ -566,15 +609,65 @@ class BossSettingsModal(discord.ui.Modal, title="Set Boss Settings"):
         )
 
 
+class StreakSettingsModal(discord.ui.Modal, title="Set Streak Settings"):
+    cap = discord.ui.TextInput(
+        label="Streak cap (max multiplier)", placeholder="e.g. 3",
+        required=True, max_length=3,
+    )
+    bonus_min = discord.ui.TextInput(
+        label="Min over-cap bonus (credits)", placeholder="e.g. 5",
+        required=True, max_length=6,
+    )
+    bonus_max = discord.ui.TextInput(
+        label="Max over-cap bonus (credits)", placeholder="e.g. 15",
+        required=True, max_length=6,
+    )
+
+    def __init__(self, cog: "Nessy", guild: discord.Guild, parent: "NessyAdminView"):
+        super().__init__()
+        self.cog = cog
+        self.guild = guild
+        self.parent = parent
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            cap = int(self.cap.value)
+            lo = int(self.bonus_min.value)
+            hi = int(self.bonus_max.value)
+            if cap < 1 or cap > 100 or lo < 0 or hi < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            await interaction.response.send_message(
+                "Cap must be 1–100, bonus values must be ≥ 0.", ephemeral=True
+            )
+            return
+        if lo > hi:
+            lo, hi = hi, lo
+        conf = self.cog.config.guild(self.guild)
+        await conf.streak_cap.set(cap)
+        await conf.streak_bonus_min.set(lo)
+        await conf.streak_bonus_max.set(hi)
+        await interaction.response.edit_message(
+            embed=await self.parent.build_embed(), view=self.parent
+        )
+
+
 # ---------------------------------------------------------------------------
 # Admin menu
 # ---------------------------------------------------------------------------
 
 class NessyAdminView(discord.ui.View):
-    def __init__(self, cog: "Nessy", guild: discord.Guild):
+    def __init__(
+        self,
+        cog: "Nessy",
+        guild: discord.Guild,
+        excluded: Optional[list[int]] = None,
+    ):
         super().__init__(timeout=300)
         self.cog = cog
         self.guild = guild
+        # Track the currently excluded channel IDs so the select can pre-check them
+        self._excluded: list[int] = list(excluded) if excluded else []
         self._build()
 
     async def build_embed(self) -> discord.Embed:
@@ -585,12 +678,14 @@ class NessyAdminView(discord.ui.View):
         max_c = await conf.reward_credits_max()
         lifetime = await conf.lifetime_seconds()
         emoji = await conf.nessy_emoji()
-        excluded = await conf.excluded_channels()
         threshold = await conf.catches_required()
         delete_delay = await conf.announcement_delete_delay()
         boss_chance = await conf.boss_chance()
         boss_min = await conf.boss_reward_credits_min()
         boss_max = await conf.boss_reward_credits_max()
+        streak_cap = await conf.streak_cap()
+        bonus_min = await conf.streak_bonus_min()
+        bonus_max = await conf.streak_bonus_max()
 
         role = self.guild.get_role(role_id) if role_id else None
 
@@ -606,19 +701,23 @@ class NessyAdminView(discord.ui.View):
         embed.add_field(name="Lifetime", value=f"{lifetime}s")
         embed.add_field(name="Emoji", value=emoji)
         embed.add_field(name="Announcement deletes in", value=f"{delete_delay}s")
+        embed.add_field(
+            name="Streak",
+            value=f"×2…×{streak_cap} (beyond: +{bonus_min}–{bonus_max} bonus)",
+        )
         embed.add_field(name="Boss chance", value=f"{boss_chance}%")
         embed.add_field(
             name="Boss credits", value=f"{boss_min} – {boss_max} per winner"
         )
 
-        if excluded:
+        if self._excluded:
             names = []
-            for cid in excluded[:10]:
+            for cid in self._excluded[:10]:
                 ch = self.guild.get_channel(cid)
                 names.append(ch.mention if ch else f"<#{cid}>")
             value = ", ".join(names)
-            if len(excluded) > 10:
-                value += f" (+{len(excluded) - 10} more)"
+            if len(self._excluded) > 10:
+                value += f" (+{len(self._excluded) - 10} more)"
         else:
             value = "None"
         embed.add_field(name="Excluded channels", value=value, inline=False)
@@ -640,6 +739,10 @@ class NessyAdminView(discord.ui.View):
         credits_btn = discord.ui.Button(label="Set Credits Range", style=discord.ButtonStyle.primary)
         credits_btn.callback = self._open_credits
         self.add_item(credits_btn)
+
+        streak_btn = discord.ui.Button(label="Set Streak Settings", style=discord.ButtonStyle.primary)
+        streak_btn.callback = self._open_streak
+        self.add_item(streak_btn)
 
         lifetime_btn = discord.ui.Button(label="Set Lifetime", style=discord.ButtonStyle.primary)
         lifetime_btn.callback = self._open_lifetime
@@ -671,11 +774,19 @@ class NessyAdminView(discord.ui.View):
         reset_btn.callback = self._reset
         self.add_item(reset_btn)
 
+        # Pre-select currently excluded channels so they persist when adding new ones
+        defaults = [
+            discord.Object(id=cid)
+            for cid in self._excluded
+            if self.guild.get_channel(cid) is not None
+        ]
+
         select: discord.ui.ChannelSelect = discord.ui.ChannelSelect(
             channel_types=[discord.ChannelType.text],
             placeholder="Exclude channels Nessy should NOT appear in",
             min_values=0,
             max_values=25,
+            default_values=defaults,
         )
         select.callback = self._on_channel_select
         self.add_item(select)
@@ -696,6 +807,9 @@ class NessyAdminView(discord.ui.View):
 
     async def _open_credits(self, interaction: discord.Interaction):
         await interaction.response.send_modal(CreditsModal(self.cog, self.guild, self))
+
+    async def _open_streak(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(StreakSettingsModal(self.cog, self.guild, self))
 
     async def _open_lifetime(self, interaction: discord.Interaction):
         await interaction.response.send_modal(LifetimeModal(self.cog, self.guild, self))
@@ -750,7 +864,12 @@ class NessyAdminView(discord.ui.View):
         select = next(c for c in self.children if isinstance(c, discord.ui.ChannelSelect))
         excluded = [c.id for c in select.values]
         await self.cog.config.guild(self.guild).excluded_channels.set(excluded)
-        await interaction.response.edit_message(embed=await self.build_embed(), view=self)
+
+        # Rebuild the view so the select's default_values reflect the new state
+        new_view = NessyAdminView(self.cog, self.guild, excluded)
+        await interaction.response.edit_message(
+            embed=await new_view.build_embed(), view=new_view
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -781,6 +900,9 @@ class Nessy(commands.Cog):
             boss_chance=1,
             boss_reward_credits_min=100,
             boss_reward_credits_max=500,
+            streak_cap=3,
+            streak_bonus_min=5,
+            streak_bonus_max=15,
         )
         self.config.register_member(catches=0, streak=0)
 
@@ -1004,7 +1126,8 @@ class Nessy(commands.Cog):
     @commands.admin_or_permissions(administrator=True)
     async def nessy_menu(self, ctx: commands.Context):
         """Open the interactive Nessy admin menu."""
-        view = NessyAdminView(self, ctx.guild)
+        excluded = await self.config.guild(ctx.guild).excluded_channels()
+        view = NessyAdminView(self, ctx.guild, excluded)
         await ctx.send(embed=await view.build_embed(), view=view)
 
     @nessy_group.command(name="spawn")
@@ -1067,6 +1190,9 @@ class Nessy(commands.Cog):
         boss_chance = await conf.boss_chance()
         boss_min = await conf.boss_reward_credits_min()
         boss_max = await conf.boss_reward_credits_max()
+        streak_cap = await conf.streak_cap()
+        bonus_min = await conf.streak_bonus_min()
+        bonus_max = await conf.streak_bonus_max()
         role = ctx.guild.get_role(role_id) if role_id else None
 
         nxt = self.next_spawn.get(ctx.guild.id)
@@ -1081,6 +1207,10 @@ class Nessy(commands.Cog):
         embed.add_field(name="Excluded channels", value=str(len(excluded)))
         embed.add_field(name="Lifetime", value=f"{lifetime}s")
         embed.add_field(name="Announcement deletes in", value=f"{delete_delay}s")
+        embed.add_field(
+            name="Streak",
+            value=f"×2…×{streak_cap} (beyond: +{bonus_min}–{bonus_max})",
+        )
         embed.add_field(name="Boss chance", value=f"{boss_chance}%")
         embed.add_field(name="Boss credits", value=f"{boss_min} – {boss_max} per winner")
         await ctx.send(embed=embed)
