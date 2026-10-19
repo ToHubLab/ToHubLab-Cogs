@@ -236,5 +236,4 @@ rare team-based Boss Nessy fight and a daily first-catch bonus.
 ## Support
 
 - **Bug reports & feature requests:** Please open an issue in the repository.
-- **Quick help & general support:**  [![Discord Support](https://img.shields.io/discord/1549415908143792149?logo=discord&label=Discord%20Support)](https://discord.gg/xZgWjC2HH)
-
+- **Quick help & general support:** https://github.com/ToHubLab/ToHubLab-Cogs/issues
